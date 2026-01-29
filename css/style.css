@@ -1,3 +1,24 @@
+/* لتنسيق الصفحة الرئيسية */
+.home-buttons {
+    margin-top: 2rem;
+}
+
+.home-buttons .button {
+    display: inline-block;
+    width: 45%;
+    padding: 1rem;
+    margin: 0.5rem;
+    background-color: #007bff;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    text-align: center;
+    transition: background-color 0.3s;
+}
+
+.home-buttons .button:hover {
+    background-color: #0056b3;
+}
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: #f4f4f9;
