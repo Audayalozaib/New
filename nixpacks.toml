@@ -1,7 +1,15 @@
-[phases.setup]
-nixPkgs = ["php", "php.pdo_mysql"]
+[build]
+builder = "NIXPACKS"
 
-[phases.build]
-cmds = [
-    "cp php.ini /etc/php/php.ini"
+[phases.setup]
+nixPkgs = [
+    "php",
+    "php.pdo_mysql",
+    "php.mysqli"
 ]
+
+[deploy]
+startCommand = "frankenphp run"
+healthcheckPath = "/check_driver.php"
+healthcheckTimeout = 100
+restartPolicyType = "ON_FAILURE"
