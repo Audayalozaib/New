@@ -1,30 +1,29 @@
 <?php
 // config/database.php
 
-// === الطريقة الجديدة: استخدام رابط الاتصال الكامل (الأكثر موثوقية) ===
- $dbUrl = getenv('DB_URL');
+// === الطريقة النهائية: استخدام رابط الاتصال الكامل ===
 
-if ($dbUrl) {
-    // تفكيك الرابط للحصول على المكونات
-    $dbParts = parse_url($dbUrl);
-    
-    $host = $dbParts['host'];
-    $port = $dbParts['port'];
-    $db_name = ltrim($dbParts['path'], '/'); // إزالة الشرطة المائلة من البداية
-    $username = $dbParts['user'];
-    $password = $dbParts['pass'];
-} else {
-    // في حالة عدم وجود الرابط (للعمل المحلي فقط)
-    $host = 'localhost';
-    $db_name = 'auth_system';
-    $username = 'root';
-    $password = '';
-    $port = '3306';
+// جلب رابط الاتصال الكامل من متغيرات البيئة
+ $dbUrl = getenv('MYSQL_URL');
+
+// التحقق من وجود الرابط
+if (!$dbUrl) {
+    die("متغير البيئة MYSQL_URL غير موجود. تأكد من إعدادات Railway.");
 }
+
+// استخدام دالة مدمجة لتفكيك الرابط
+ $dbParts = parse_url($dbUrl);
+
+// استخلاص المعلومات من الرابط
+ $host = $dbParts['host'];
+ $port = $dbParts['port'];
+ $db_name = ltrim($dbParts['path'], '/');
+ $username = $dbParts['user'];
+ $password = $dbParts['pass'];
 
  $charset = 'utf8mb4';
 
-// مصدر بيانات PDO (Data Source Name)
+// إنشاء مصدر بيانات PDO (DSN)
  $dsn = "mysql:host=$host;port=$port;dbname=$db_name;charset=$charset";
 
 // خيارات PDO
@@ -35,7 +34,7 @@ if ($dbUrl) {
 ];
 
 try {
-    // إنشاء كائن PDO للاتصال
+    // محاولة الاتصال
     $pdo = new PDO($dsn, $username, $password, $options);
 } catch (\PDOException $e) {
     // عرض الخطأ الحقيقي للاستكشاف
