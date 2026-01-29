@@ -3,9 +3,9 @@ builder = "NIXPACKS"
 
 [phases.setup]
 nixPkgs = [
-    "php",
-    "php.pdo_mysql",
-    "php.mysqli"
+    "php83",                     # استخدم PHP 8.3 للاستقرار
+    "php83Extensions.pdo_mysql", # السائق المطلوب
+    "php83Extensions.mysqli"     # اختياري إذا تريد mysqli
 ]
 
 [deploy]
