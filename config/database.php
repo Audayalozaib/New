@@ -1,16 +1,31 @@
 <?php
 // config/database.php
 
-// جلب بيانات الاتصال من متغيرات البيئة التي سنضعها في Railway
-// إذا لم توجد المتغيرات (عند العمل المحلي)، سيستخدم القيم الافتراضية
- $host = getenv('DB_HOST') ?: 'localhost';
- $db_name = getenv('DB_NAME') ?: 'auth_system';
- $username = getenv('DB_USER') ?: 'root';
- $password = getenv('DB_PASSWORD') ?: '';
+// === الطريقة الجديدة: استخدام رابط الاتصال الكامل (الأكثر موثوقية) ===
+ $dbUrl = getenv('DB_URL');
+
+if ($dbUrl) {
+    // تفكيك الرابط للحصول على المكونات
+    $dbParts = parse_url($dbUrl);
+    
+    $host = $dbParts['host'];
+    $port = $dbParts['port'];
+    $db_name = ltrim($dbParts['path'], '/'); // إزالة الشرطة المائلة من البداية
+    $username = $dbParts['user'];
+    $password = $dbParts['pass'];
+} else {
+    // في حالة عدم وجود الرابط (للعمل المحلي فقط)
+    $host = 'localhost';
+    $db_name = 'auth_system';
+    $username = 'root';
+    $password = '';
+    $port = '3306';
+}
+
  $charset = 'utf8mb4';
 
 // مصدر بيانات PDO (Data Source Name)
- $dsn = "mysql:host=$host;dbname=$db_name;charset=$charset";
+ $dsn = "mysql:host=$host;port=$port;dbname=$db_name;charset=$charset";
 
 // خيارات PDO
  $options = [
@@ -23,9 +38,7 @@ try {
     // إنشاء كائن PDO للاتصال
     $pdo = new PDO($dsn, $username, $password, $options);
 } catch (\PDOException $e) {
-    // === التعديل هنا ===
-    // هذا التعديل مؤقت فقط لرؤية الخطأ الحقيقي
+    // عرض الخطأ الحقيقي للاستكشاف
     die("فشل الاتصال بقاعدة البيانات. الخطأ هو: " . $e->getMessage());
-    // === نهاية التعديل ===
 }
 ?>
