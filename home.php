@@ -1,276 +1,689 @@
-<?php
-// =============================================================================
-// لوحة تحكم بوت تليجرام الاحترافية - ملف واحد متكامل
-// =============================================================================
-
-// تعطيل عرض الأخطاء للمستخدم (لأسباب أمنية)
-error_reporting(0);
-ini_set('display_errors', 0);
-
-// ملفات التكوين والتخزين
-define('CONFIG_FILE', 'config.json');
-define('USERS_FILE', 'users.json');
-
-// =============================================================================
-// دوال مساعدة للتعامل مع تليجرام
-// =============================================================================
-
-function sendTelegramRequest($method, $params = []) {
-    $config = getConfig();
-    if (!$config || !isset($config['token'])) {
-        return false;
-    }
-    $url = "https://api.telegram.org/bot" . $config['token'] . "/" . $method;
-    $options = [
-        'http' => [
-            'header'  => "Content-type: application/x-www-form-urlencoded\r\n",
-            'method'  => 'POST',
-            'content' => http_build_query($params),
-        ],
-    ];
-    $context  = stream_context_create($options);
-    $result = file_get_contents($url, false, $context);
-    return json_decode($result, true);
-}
-
-function getConfig() {
-    return file_exists(CONFIG_FILE) ? json_decode(file_get_contents(CONFIG_FILE), true) : null;
-}
-
-function saveConfig($data) {
-    file_put_contents(CONFIG_FILE, json_encode($data, JSON_PRETTY_PRINT));
-}
-
-function getUsers() {
-    return file_exists(USERS_FILE) ? json_decode(file_get_contents(USERS_FILE), true) : [];
-}
-
-function saveUser($userId, $username) {
-    $users = getUsers();
-    if (!in_array($userId, array_column($users, 'id'))) {
-        $users[] = ['id' => $userId, 'username' => $username];
-        file_put_contents(USERS_FILE, json_encode($users, JSON_PRETTY_PRINT));
-    }
-}
-
-// =============================================================================
-// معالج الويب هوك (Webhook Handler) - قلب البوت النابض
-// يتم تنفيذ هذا الجزء عند تلقي رسالة من تليجرام
-// =============================================================================
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && file_exists(CONFIG_FILE)) {
-    $update = json_decode(file_get_contents('php://input'), true);
-    $config = getConfig();
-    $adminId = $config['admin_id'];
-
-    if (isset($update['message'])) {
-        $message = $update['message'];
-        $chatId = $message['chat']['id'];
-        $text = trim($message['text']);
-        $fromId = $message['from']['id'];
-        $username = $message['from']['username'] ?? 'Unknown';
-
-        // حفظ معلومات المستخدم
-        saveUser($fromId, $username);
-
-        // أوامر البوت
-        if (strpos($text, '/start') === 0) {
-            $response = "👋 أهلاً بك في البوت!\n\nاستخدم /help لرؤية قائمة الأوامر.";
-        } elseif (strpos($text, '/help') === 0) {
-            $response = "🤖 قائمة الأوامر:\n/start - بدء المحادثة\n/help - عرض هذه المساعدة\n/about - معرفة المزيد";
-        } elseif (strpos($text, '/about') === 0) {
-            $response = "✨ هذا بوت تم إنشاؤه وإدارته بواسطة لوحة تحكم PHP مخصصة.";
-        } elseif ($fromId == $adminId) { // أوامر الأدمن فقط
-            if (strpos($text, '/broadcast') === 0) {
-                $broadcastMessage = substr($text, 11);
-                if (!empty($broadcastMessage)) {
-                    $users = getUsers();
-                    $successCount = 0;
-                    foreach ($users as $user) {
-                        if (sendTelegramRequest('sendMessage', ['chat_id' => $user['id'], 'text' => "📢 رسالة من الأدمن:\n\n" . $broadcastMessage])) {
-                            $successCount++;
-                        }
-                    }
-                    $response = "✅ تم إرسال الرسالة بنجاح إلى $successCount مستخدم.";
-                } else {
-                    $response = "❌ الرجاء كتابة الرسالة بعد الأمر.\nمثال: /broadcast مرحباً جميعاً";
-                }
-            } else {
-                $response = "رسالة من الأدمن تم استلامها.";
-            }
-        } else {
-            $response = "لم أفهم هذا الأمر. أرسل /help للمساعدة.";
-        }
-
-        sendTelegramRequest('sendMessage', ['chat_id' => $chatId, 'text' => $response]);
-    }
-    exit; // إنهاء التنفيذ بعد معالجة الويب هوك
-}
-
-// =============================================================================
-// منطق لوحة التحكم (Admin Panel)
-// =============================================================================
-
- $message = '';
- $config = getConfig();
-
-// معالجة طلبات POST من لوحة التحكم
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['save_config'])) {
-        $token = trim($_POST['token']);
-        $adminId = trim($_POST['admin_id']);
-        if ($token && $adminId) {
-            saveConfig(['token' => $token, 'admin_id' => $adminId, 'webhook_set' => false]);
-            $message = "✅ تم حفظ الإعدادات بنجاح! الآن اضغط على 'تفعيل البوت'.";
-            $config = getConfig();
-        } else {
-            $message = "❌ الرجاء ملء جميع الحقول.";
-        }
-    } elseif (isset($_POST['set_webhook']) && $config) {
-        $webhook_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
-        $result = sendTelegramRequest('setWebhook', ['url' => $webhook_url]);
-        if ($result && $result['ok']) {
-            $config['webhook_set'] = true;
-            saveConfig($config);
-            $message = "✅ تم تفعيل البوت بنجاح! أصبح الآن جاهزًا للاستخدام.";
-        } else {
-            $message = "❌ فشل تفعيل البوت: " . ($result['description'] ?? 'خطأ غير معروف');
-        }
-    } elseif (isset($_POST['unset_webhook']) && $config) {
-        $result = sendTelegramRequest('deleteWebhook');
-        if ($result && $result['ok']) {
-            $config['webhook_set'] = false;
-            saveConfig($config);
-            $message = "✅ تم إيقاف البوت بنجاح.";
-        } else {
-            $message = "❌ فشل إيقاف البوت.";
-        }
-    } elseif (isset($_POST['delete_bot'])) {
-        if (file_exists(CONFIG_FILE)) unlink(CONFIG_FILE);
-        if (file_exists(USERS_FILE)) unlink(USERS_FILE);
-        header('Location: ' . $_SERVER['PHP_SELF']);
-        exit;
-    }
-}
-
-?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة تحكم البوت</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <title>القرآن الكريم - تلاوة وتفسير</title>
+    
+    <!-- خطوط جوجل العربية -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
-        :root { --primary: #0088cc; --dark: #2c3e50; --light: #ecf0f1; --danger: #e74c3c; --success: #2ecc71; }
-        * { box-sizing: border-box; }
-        body { font-family: 'Cairo', sans-serif; background-color: var(--dark); color: var(--light); margin: 0; padding: 20px; }
-        .container { max-width: 800px; margin: 20px auto; background-color: #34495e; padding: 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
-        h1, h2 { text-align: center; color: var(--light); }
-        h1 { font-size: 2.5rem; margin-bottom: 10px; }
-        .status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-left: 10px; }
-        .status-active { background-color: var(--success); box-shadow: 0 0 10px var(--success); }
-        .status-inactive { background-color: var(--danger); }
-        .alert { padding: 15px; background-color: rgba(255,255,255,0.1); border-radius: 8px; margin-bottom: 20px; text-align: center; }
-        .alert.success { border-right: 5px solid var(--success); }
-        .alert.error { border-right: 5px solid var(--danger); }
-        .card { background-color: rgba(0,0,0,0.2); padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: bold; }
-        input[type="text"], input[type="number"] { width: 100%; padding: 12px; border: 1px solid #555; background-color: var(--dark); color: var(--light); border-radius: 6px; font-size: 1rem; }
-        .btn { display: inline-block; padding: 12px 25px; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; font-weight: bold; text-decoration: none; transition: all 0.3s ease; margin: 5px; }
-        .btn-primary { background-color: var(--primary); color: white; }
-        .btn-danger { background-color: var(--danger); color: white; }
-        .btn-success { background-color: var(--success); color: white; }
-        .btn:hover { opacity: 0.8; transform: translateY(-2px); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
-        .user-list { max-height: 200px; overflow-y: auto; background: var(--dark); padding: 10px; border-radius: 6px; }
-        .user-list p { margin: 0; padding: 5px; border-bottom: 1px solid #555; }
+        :root {
+            --primary-color: #15803d; /* أخضر قراني */
+            --secondary-color: #dcfce7; /* أخضر فاتح */
+            --accent-color: #d97706; /* ذهبي */
+            --bg-color: #f8fafc;
+            --text-color: #1e293b;
+            --sidebar-width: 280px;
+            --card-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+
+        /* الوضع الليلي */
+        [data-theme="dark"] {
+            --primary-color: #22c55e;
+            --secondary-color: #064e3b;
+            --bg-color: #0f172a;
+            --text-color: #e2e8f0;
+            --card-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.5);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* القائمة الجانبية */
+        aside {
+            width: var(--sidebar-width);
+            background-color: var(--primary-color);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            transition: transform 0.3s ease;
+            z-index: 100;
+        }
+
+        .logo {
+            text-align: center;
+            font-family: 'Amiri', serif;
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+            padding-bottom: 1rem;
+        }
+
+        .search-box {
+            margin-bottom: 1rem;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: 6px;
+            border: none;
+            font-family: 'Tajawal', sans-serif;
+        }
+
+        .surah-list {
+            flex: 1;
+            overflow-y: auto;
+            list-style: none;
+        }
+
+        .surah-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        .surah-list::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3);
+            border-radius: 3px;
+        }
+
+        .surah-item {
+            padding: 0.8rem;
+            cursor: pointer;
+            border-radius: 6px;
+            margin-bottom: 5px;
+            transition: background 0.2s;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .surah-item:hover {
+            background-color: rgba(255,255,255,0.1);
+        }
+
+        .surah-item.active {
+            background-color: var(--accent-color);
+            font-weight: bold;
+        }
+
+        .surah-number {
+            background: rgba(255,255,255,0.2);
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 0.8rem;
+            margin-left: 10px;
+        }
+
+        /* المحتوى الرئيسي */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: relative;
+        }
+
+        header {
+            background-color: var(--bg-color);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .controls button {
+            background: transparent;
+            border: 1px solid var(--primary-color);
+            color: var(--primary-color);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: 'Tajawal', sans-serif;
+            transition: 0.3s;
+            margin-left: 5px;
+        }
+        [data-theme="dark"] .controls button {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        .controls button:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        select {
+            padding: 0.5rem;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            font-family: 'Tajawal', sans-serif;
+        }
+
+        /* منطقة القراءة */
+        #quran-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem;
+            padding-bottom: 100px; /* مساحة للمشغل */
+            max-width: 900px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .basmalah {
+            text-align: center;
+            font-family: 'Amiri', serif;
+            font-size: 2rem;
+            margin-bottom: 2rem;
+            color: var(--primary-color);
+        }
+
+        .ayah-card {
+            background-color: var(--bg-color);
+            border: 1px solid rgba(0,0,0,0.05);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            transition: 0.3s;
+        }
+
+        .ayah-card.active {
+            border-right: 5px solid var(--accent-color);
+            background-color: var(--secondary-color);
+            transform: scale(1.01);
+        }
+        [data-theme="dark"] .ayah-card.active {
+            background-color: rgba(34, 197, 94, 0.1);
+        }
+
+        .ayah-actions {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+            color: #64748b;
+            position: relative;
+        }
+
+        [data-theme="dark"] .ayah-actions {
+            color: #94a3b8;
+        }
+
+        .play-btn-ayah {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--primary-color);
+        }
+
+        .ayah-text {
+            font-family: 'Amiri', serif;
+            font-size: 2.5rem;
+            line-height: 2.2;
+            text-align: right;
+        }
+
+        .tafsir-text {
+            margin-top: 1rem;
+            font-size: 1rem;
+            line-height: 1.6;
+            color: #475569;
+            border-top: 1px solid rgba(0,0,0,0.1);
+            padding-top: 0.5rem;
+            display: none; /* مخفي افتراضياً */
+        }
+        [data-theme="dark"] .tafsir-text {
+            color: #cbd5e1;
+        }
+
+        /* شريط المشغل السفلي */
+        .player-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0; /* سيتم تعديله بـ JS ليأخذ عرض الشاشة ناقص الشريط الجانبي */
+            right: 0;
+            background: white;
+            padding: 1rem;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 200;
+            border-top: 3px solid var(--accent-color);
+        }
+        [data-theme="dark"] .player-bar {
+            background: #1e293b;
+        }
+
+        .player-info {
+            flex: 1;
+        }
+        .player-info h4 { margin-bottom: 0.2rem; }
+        .player-info p { font-size: 0.85rem; color: #64748b; }
+
+        .player-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .ctrl-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-color);
+        }
+        .ctrl-btn-main {
+            background: var(--primary-color);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* القائمة العائمة للجوال */
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        @media (max-width: 768px) {
+            aside {
+                position: fixed;
+                height: 100%;
+                right: -100%;
+            }
+            aside.open {
+                right: 0;
+            }
+            .mobile-menu-btn {
+                display: block;
+            }
+            .ayah-text {
+                font-size: 1.8rem;
+            }
+            .player-bar {
+                right: 0;
+                bottom: 60px; /* مساحة للتنقل السفلي في الجوال إن وجد */
+            }
+            /* تعديل بسيط للعرض في الجوال */
+            #quran-container {
+                padding: 1rem;
+            }
+        }
+        
+        /* Loading Spinner */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 50px auto;
+            display: none;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>لوحة تحكم البوت <span class="status-indicator <?php echo ($config && $config['webhook_set']) ? 'status-active' : 'status-inactive'; ?>"></span></h1>
-    <p style="text-align:center; opacity:0.7;">أنشئ وأدر بوت تليجرام الخاص بك من هنا</p>
-
-    <?php if ($message): ?>
-        <div class="alert <?php echo strpos($message, '✅') !== false ? 'success' : 'error'; ?>">
-            <?php echo $message; ?>
+    <!-- القائمة الجانبية -->
+    <aside id="sidebar">
+        <div class="logo">
+            القرآن الكريم
         </div>
-    <?php endif; ?>
-
-    <?php if (!$config): ?>
-        <!-- شاشة الإعداد الأولي -->
-        <div class="card">
-            <h2><i class="fas fa-robot"></i> إعداد بوت جديد</h2>
-            <p>للبدء،你需要从 <a href="https://t.me/BotFather" target="_blank">@BotFather</a> على تليجرام الحصول على التوكن وآيدي الأدمن.</p>
-            <form method="POST">
-                <div class="form-group">
-                    <label for="token">توكن البوت (Bot Token)</label>
-                    <input type="text" id="token" name="token" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" required>
-                </div>
-                <div class="form-group">
-                    <label for="admin_id">آيدي الأدمن (Admin ID)</label>
-                    <input type="number" id="admin_id" name="admin_id" placeholder="123456789" required>
-                    <small>للحصول على آيديك، أرسل رسالة لبوت <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a>.</small>
-                </div>
-                <button type="submit" name="save_config" class="btn btn-primary"><i class="fas fa-save"></i> حفظ الإعدادات</button>
-            </form>
+        <div class="search-box">
+            <input type="text" id="search-input" placeholder="ابحث عن سورة...">
         </div>
-    <?php else: ?>
-        <!-- لوحة التحكم الرئيسية -->
-        <div class="card">
-            <h2><i class="fas fa-cogs"></i> إدارة البوت</h2>
-            <div class="grid">
-                <div>
-                    <strong>حالة البوت:</strong>
-                    <p><?php echo $config['webhook_set'] ? '<span style="color: var(--success);">🟢 نشط</span>' : '<span style="color: var(--danger);">🔴 غير نشط</span>'; ?></p>
-                </div>
-                <div>
-                    <strong>آيدي الأدمن:</strong>
-                    <p><?php echo htmlspecialchars($config['admin_id']); ?></p>
+        <ul class="surah-list" id="surah-list">
+            <!-- سيتم ملؤها بالجافاسكربت -->
+        </ul>
+    </aside>
+
+    <!-- المحتوى الرئيسي -->
+    <main>
+        <header>
+            <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+            <h3 id="current-surah-name">اختر سورة للبدء</h3>
+            <div class="controls">
+                <select id="reciter-select" onchange="changeReciter()">
+                    <option value="ar.alafasy">مشاري العفاسي</option>
+                    <option value="ar.husaboratory">أحمد العجمي</option>
+                    <option value="ar.abdulbasitmorattal">عبد الباسط (مرتل)</option>
+                    <option value="ar.minaboratory">محمد صديق المنشاوي</option>
+                </select>
+                <button onclick="toggleTheme()">🌙/☀️</button>
+                <button onclick="toggleTafsirMode()">تفسير/نص</button>
+            </div>
+        </header>
+
+        <div id="quran-container">
+            <div class="loader" id="loader"></div>
+            <div id="surah-content">
+                <!-- محتوى السورة يظهر هنا -->
+                <div style="text-align: center; margin-top: 50px; color: #888;">
+                    <p>اختر سورة من القائمة الجانبية للقراءة والاستماع</p>
                 </div>
             </div>
-            <hr style="margin: 20px 0; border: 1px solid #555;">
-            <form method="POST" style="display:inline;">
-                <?php if ($config['webhook_set']): ?>
-                    <button type="submit" name="unset_webhook" class="btn btn-danger"><i class="fas fa-stop"></i> إيقاف البوت</button>
-                <?php else: ?>
-                    <button type="submit" name="set_webhook" class="btn btn-success"><i class="fas fa-play"></i> تفعيل البوت</button>
-                <?php endif; ?>
-            </form>
-            <form method="POST" style="display:inline;" onsubmit="return confirm('هل أنت متأكد من حذف البوت وكل بياناته؟');">
-                <button type="submit" name="delete_bot" class="btn btn-danger"><i class="fas fa-trash"></i> حذف البوت</button>
-            </form>
         </div>
 
-        <div class="card">
-            <h2><i class="fas fa-users"></i> المستخدمون (<?php echo count(getUsers()); ?>)</h2>
-            <div class="user-list">
-                <?php
-                $users = getUsers();
-                if (empty($users)) {
-                    echo "<p>لا يوجد مستخدمون بعد.</p>";
-                } else {
-                    foreach ($users as $user) {
-                        echo "<p>ID: " . htmlspecialchars($user['id']) . " - @" . htmlspecialchars($user['username']) . "</p>";
+        <!-- مشغل الصوت -->
+        <div class="player-bar">
+            <div class="player-info">
+                <h4 id="player-status">لا يوجد تلاوة</h4>
+                <p id="player-ayah-details">--</p>
+            </div>
+            <div class="player-controls">
+                <button class="ctrl-btn" onclick="playPrevAyah()">⏮</button>
+                <button class="ctrl-btn ctrl-btn-main" id="main-play-btn" onclick="togglePlay()">▶</button>
+                <button class="ctrl-btn" onclick="playNextAyah()">⏭</button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- المتغيرات العامة ---
+        let surahs = [];
+        let currentSurah = null;
+        let currentAyahs = []; // تخزين آيات السورة الحالية
+        let currentAudioIndex = -1; // index of current ayah in currentAyahs
+        let audio = new Audio();
+        let isTafsirVisible = false;
+
+        // --- عنصر واجهة المستخدم ---
+        const surahListEl = document.getElementById('surah-list');
+        const surahContentEl = document.getElementById('surah-content');
+        const loaderEl = document.getElementById('loader');
+        const playerStatusEl = document.getElementById('player-status');
+        const playerAyahDetailsEl = document.getElementById('player-ayah-details');
+        const mainPlayBtn = document.getElementById('main-play-btn');
+        
+        // --- عند تحميل الصفحة ---
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchSurahs();
+            setupEvents();
+        });
+
+        function setupEvents() {
+            // البحث
+            document.getElementById('search-input').addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase();
+                const items = document.querySelectorAll('.surah-item');
+                items.forEach(item => {
+                    const name = item.innerText.toLowerCase();
+                    item.style.display = name.includes(query) ? 'flex' : 'none';
+                });
+            });
+
+            // حدث انتهاء الصوت للتشغيل التلقائي
+            audio.addEventListener('ended', () => {
+                playNextAyah();
+            });
+            
+            audio.addEventListener('timeupdate', () => {
+                // يمكن إضافة شريط تقدم هنا
+            });
+            
+            audio.addEventListener('play', () => {
+                mainPlayBtn.innerText = '⏸';
+            });
+            
+            audio.addEventListener('pause', () => {
+                mainPlayBtn.innerText = '▶';
+            });
+        }
+
+        // --- جلب قائمة السور ---
+        async function fetchSurahs() {
+            try {
+                const response = await fetch('https://api.alquran.cloud/v1/surah');
+                const data = await response.json();
+                surahs = data.data;
+                renderSurahList(surahs);
+            } catch (error) {
+                console.error('Error fetching surahs:', error);
+                surahListEl.innerHTML = '<li style="padding:1rem">حدث خطأ في تحميل السور</li>';
+            }
+        }
+
+        function renderSurahList(list) {
+            surahListEl.innerHTML = '';
+            list.forEach(surah => {
+                const li = document.createElement('li');
+                li.className = 'surah-item';
+                li.innerHTML = `
+                    <span>${surah.name}</span>
+                    <span class="surah-number">${surah.number}</span>
+                `;
+                li.onclick = () => loadSurah(surah.number, li);
+                surahListEl.appendChild(li);
+            });
+        }
+
+        // --- جلب تفاصيل السورة ---
+        async function loadSurah(number, element) {
+            // تحديث واجهة القائمة
+            document.querySelectorAll('.surah-item').forEach(i => i.classList.remove('active'));
+            element.classList.add('active');
+            
+            // في الجوال، أغلق القائمة بعد الاختيار
+            if(window.innerWidth < 768) {
+                document.getElementById('sidebar').classList.remove('open');
+            }
+
+            // إظهار التحميل
+            surahContentEl.style.display = 'none';
+            loaderEl.style.display = 'block';
+
+            const reciter = document.getElementById('reciter-select').value;
+            
+            try {
+                // نجلب النص والصوت معاً (Audio API for every surah)
+                const response = await fetch(`https://api.alquran.cloud/v1/surah/${number}/editions/quran-uthmani,${reciter},ar.muyassar`);
+                const data = await response.json();
+                
+                const quranData = data.data[0];
+                const audioData = data.data[1];
+                const tafsirData = data.data[2];
+
+                currentSurah = quranData;
+                
+                // دمج البيانات (النص + الصوت + التفسير) في مصفوفة واحدة ليسهل التعامل معها
+                currentAyahs = quranData.ayahs.map((ayah, index) => {
+                    return {
+                        number: ayah.number,
+                        numberInSurah: ayah.numberInSurah,
+                        text: ayah.text,
+                        audio: audioData.ayahs[index].audio, // رابط الصوت
+                        tafsir: tafsirData.ayahs[index].text // نص التفسير
+                    };
+                });
+
+                renderSurahContent(quranData);
+                
+                // تحديث العنوان
+                document.getElementById('current-surah-name').innerText = quranData.name;
+                
+                // إعادة ضبط المشغل
+                currentAudioIndex = -1;
+                audio.pause();
+                playerStatusEl.innerText = `سورة ${quranData.name}`;
+                playerAyahDetailsEl.innerText = 'اضغط على الآية لتشغيلها';
+
+            } catch (error) {
+                console.error('Error loading surah:', error);
+                surahContentEl.innerHTML = '<div style="text-align:center">حدث خطأ في تحميل البيانات. تأكد من الاتصال بالإنترنت.</div>';
+                loaderEl.style.display = 'none';
+                surahContentEl.style.display = 'block';
+            }
+        }
+
+        function renderSurahContent(surah) {
+            loaderEl.style.display = 'none';
+            surahContentEl.style.display = 'block';
+            surahContentEl.innerHTML = '';
+
+            // البسملة (ما عدا التوبة وبعض الحالات)
+            if (surah.number !== 9) {
+                const basmalah = document.createElement('div');
+                basmalah.className = 'basmalah';
+                basmalah.innerText = 'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ';
+                surahContentEl.appendChild(basmalah);
+            }
+
+            currentAyahs.forEach((ayah, index) => {
+                const div = document.createElement('div');
+                div.id = `ayah-${index}`;
+                div.className = 'ayah-card';
+                
+                // ترتيب الآيات في عرض الصفحة (للمدورة)
+                div.innerHTML = `
+                    <div class="ayah-actions">
+                        <span>آية ${ayah.numberInSurah}</span>
+                        <button class="play-btn-ayah" onclick="playSpecificAyah(${index})">▶ تشغيل</button>
+                    </div>
+                    <div class="ayah-text">${ayah.text}</div>
+                    <div class="tafsir-text">${ayah.tafsir}</div>
+                `;
+
+                // إضافة حدث عند الضغط على الآية للتشغيل
+                div.addEventListener('click', (e) => {
+                    if(e.target.tagName !== 'BUTTON') {
+                        playSpecificAyah(index);
                     }
-                }
-                ?>
-            </div>
-        </div>
+                });
 
-        <div class="card">
-            <h2><i class="fas fa-paper-plane"></i> إرسال رسالة جماعية (للأدمن)</h2>
-            <p>لإرسال رسالة لجميع المستخدمين، اذهب إلى البوت وأرسل الأمر:</p>
-            <code style="background: var(--dark); padding: 5px 10px; border-radius: 5px; display: inline-block; margin-top: 10px;">/broadcast نص الرسالة هنا</code>
-        </div>
+                surahContentEl.appendChild(div);
+            });
+        }
 
-    <?php endif; ?>
-</div>
+        // --- منطق الصوت ---
+        
+        function playSpecificAyah(index) {
+            if (index >= 0 && index < currentAyahs.length) {
+                currentAudioIndex = index;
+                highlightAyah(index);
+                const url = currentAyahs[index].audio;
+                audio.src = url;
+                audio.play();
+                
+                // تحديث واجهة المشغل
+                playerStatusEl.innerText = `جاري التلاوة: ${currentSurah.name}`;
+                playerAyahDetailsEl.innerText = `الآية ${currentAyahs[index].numberInSurah}`;
+            }
+        }
 
+        function togglePlay() {
+            if (!audio.src) {
+                if(currentAyahs.length > 0) playSpecificAyah(0);
+                return;
+            }
+            if (audio.paused) {
+                audio.play();
+            } else {
+                audio.pause();
+            }
+        }
+
+        function playNextAyah() {
+            if (currentAudioIndex + 1 < currentAyahs.length) {
+                playSpecificAyah(currentAudioIndex + 1);
+            } else {
+                // انتهت السورة، إيقاف
+                audio.pause();
+                showToast('انتهت السورة');
+            }
+        }
+
+        function playPrevAyah() {
+            if (currentAudioIndex - 1 >= 0) {
+                playSpecificAyah(currentAudioIndex - 1);
+            }
+        }
+
+        function highlightAyah(index) {
+            // إزالة التحديد القديم
+            document.querySelectorAll('.ayah-card').forEach(el => el.classList.remove('active'));
+            // إضافة التحديد الجديد
+            const el = document.getElementById(`ayah-${index}`);
+            if (el) {
+                el.classList.add('active');
+                // سكرول ناعم للآية
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        function changeReciter() {
+            // إعادة تحميل السورة الحالية بالقارئ الجديد
+            if (currentSurah) {
+                const activeEl = document.querySelector('.surah-item.active');
+                loadSurah(currentSurah.number, activeEl);
+            }
+        }
+
+        // --- أدوات واجهة المستخدم ---
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+        }
+
+        function toggleTheme() {
+            const body = document.body;
+            if (body.getAttribute('data-theme') === 'dark') {
+                body.removeAttribute('data-theme');
+            } else {
+                body.setAttribute('data-theme', 'dark');
+            }
+        }
+
+        function toggleTafsirMode() {
+            isTafsirVisible = !isTafsirVisible;
+            const tafsirElements = document.querySelectorAll('.tafsir-text');
+            const quranTextElements = document.querySelectorAll('.ayah-text');
+            
+            if (isTafsirVisible) {
+                tafsirElements.forEach(el => el.style.display = 'block');
+                // يمكن تقليل حجم خط القرآن قليلا لتركيز على التفسير
+                quranTextElements.forEach(el => el.style.fontSize = '1.8rem'); 
+            } else {
+                tafsirElements.forEach(el => el.style.display = 'none');
+                quranTextElements.forEach(el => el.style.fontSize = '2.5rem');
+            }
+        }
+        
+        function showToast(message) {
+            // إنشاء عنصر إشعار بسيط
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+                background: rgba(0,0,0,0.8); color: white; padding: 10px 20px;
+                border-radius: 20px; z-index: 1000; font-size: 0.9rem;
+            `;
+            toast.innerText = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+    </script>
 </body>
 </html>
