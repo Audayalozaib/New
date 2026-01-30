@@ -1,490 +1,507 @@
 <?php
-// =============================================================================
-// منطق PHP: بيانات وهمية لمعرض الأعمال (Portfolio)
-// =============================================================================
+session_start();
+$data_file = 'bots_data.json';
 
- $portfolio_items = [
-    [
-        'id' => 1,
-        'title' => 'تطبيق "تواصل" للهواتف الذكية',
-        'category' => 'تطبيقات الجوال',
-        'image_url' => 'https://images.unsplash.com/photo-1551650975-87deedd944c3?q=80&w=2070&auto=format&fit=crop'
-    ],
-    [
-        'id' => 2,
-        'title' => 'منصة "تعلم" للتعليم الإلكتروني',
-        'category' => 'تطوير الويب',
-        'image_url' => 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=2070&auto=format&fit=crop'
-    ],
-    [
-        'id' => 3,
-        'title' => 'هوية بصرية لمقاهي "أصيلة"',
-        'category' => 'هوية بصرية',
-        'image_url' => 'https://images.unsplash.com/photo-1544966503-7e3c4c857b9c?q=80&w=2070&auto=format&fit=crop'
-    ],
-    [
-        'id' => 4,
-        'title' => 'حملة "نواة" للتسويق الرقمي',
-        'category' => 'تسويق رقمي',
-        'image_url' => 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2015&auto=format&fit=crop'
-    ],
-    [
-        'id' => 5,
-        'title' => 'موقع "فنادق الراحة" الحصري',
-        'category' => 'تطوير الويب',
-        'image_url' => 'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=2070&auto=format&fit=crop'
-    ],
-    [
-        'id' => 6,
-        'title' => 'واجهة متجر "إلكترو" الإلكتروني',
-        'category' => 'تصميم واجهات',
-        'image_url' => 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?q=80&w=2070&auto=format&fit=crop'
-    ]
-];
+// دوال مساعدة للقراءة والكتابة
+function getBots($file) {
+    if (!file_exists($file)) return [];
+    $content = file_get_contents($file);
+    return json_decode($content, true) ?? [];
+}
 
+function saveBots($file, $bots) {
+    file_put_contents($file, json_encode($bots, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+}
+
+// معالجة الطلبات (API) عند إرسال النموذج
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+    $bots = getBots($data_file);
+
+    if ($action === 'create_bot') {
+        $newBot = [
+            'id' => uniqid(),
+            'name' => htmlspecialchars($_POST['bot_name']),
+            'token' => htmlspecialchars($_POST['bot_token']),
+            'admin_id' => htmlspecialchars($_POST['admin_id']),
+            'status' => 'inactive',
+            'giveaways' => [],
+            'settings' => [
+                'channel_links' => [],
+                'required_members' => false
+            ]
+        ];
+        $bots[] = $newBot;
+        saveBots($data_file, $bots);
+        header("Location: home.php");
+        exit;
+    }
+
+    if ($action === 'update_settings') {
+        $botId = $_POST['bot_id'];
+        foreach ($bots as &$bot) {
+            if ($bot['id'] === $botId) {
+                $bot['settings']['channel_links'] = explode("\n", $_POST['channels']);
+                $bot['settings']['required_members'] = isset($_POST['require_join']);
+                $bot['admin_id'] = htmlspecialchars($_POST['admin_id']);
+            }
+        }
+        saveBots($data_file, $bots);
+        header("Location: home.php?bot={$botId}");
+        exit;
+    }
+
+    if ($action === 'create_giveaway') {
+        $botId = $_POST['bot_id'];
+        foreach ($bots as &$bot) {
+            if ($bot['id'] === $botId) {
+                $newGiveaway = [
+                    'id' => uniqid(),
+                    'title' => htmlspecialchars($_POST['g_title']),
+                    'prize' => htmlspecialchars($_POST['g_prize']),
+                    'winners_count' => (int)$_POST['g_winners'],
+                    'end_time' => $_POST['g_end_date'],
+                    'status' => 'active', // active, ended
+                    'participants' => []
+                ];
+                $bot['giveaways'][] = $newGiveaway;
+            }
+        }
+        saveBots($data_file, $bots);
+        header("Location: home.php?bot={$botId}&tab=giveaways");
+        exit;
+    }
+    
+    if ($action === 'delete_bot') {
+        $botId = $_POST['bot_id'];
+        $bots = array_filter($bots, function($b) use ($botId) { return $b['id'] !== $botId; });
+        saveBots($data_file, array_values($bots));
+        header("Location: home.php");
+        exit;
+    }
+}
+
+$active_bot_id = $_GET['bot'] ?? null;
+$tab = $_GET['tab'] ?? 'dashboard';
+$bots_list = getBots($data_file);
+$current_bot = null;
+
+if ($active_bot_id) {
+    foreach ($bots_list as $b) {
+        if ($b['id'] === $active_bot_id) {
+            $current_bot = $b;
+            break;
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نواة الرقمية | وكالة إبداعية</title>
-    
-    <!-- Font Awesome for Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-
-    <!-- =============================================================================
-    تنسيقات CSS: تصميم حديث ونظيف
-    ============================================================================= -->
+    <title>مدير بوتات السحوبات - Telegram Giveaway Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        /* خطوط عربية وإنجليزية */
-        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&family=Tajawal:wght@400;500;700&display=swap');
-
-        /* متغيرات CSS للسهولة */
         :root {
-            --primary-color: #007BFF;
-            --secondary-color: #6c757d;
-            --dark-color: #343a40;
-            --light-color: #f8f9fa;
-            --accent-color: #ffc107;
+            --primary: #0088cc;
+            --primary-dark: #006699;
+            --bg: #f5f7fa;
+            --sidebar-bg: #1e293b;
+            --card-bg: #ffffff;
+            --text: #334155;
+            --text-light: #94a3b8;
+            --danger: #ef4444;
+            --success: #22c55e;
+            --border: #e2e8f0;
         }
 
-        /* إعدادات عامة */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Tajawal', sans-serif; }
+        
+        body { background-color: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
 
-        html {
-            scroll-behavior: smooth;
-        }
+        /* Sidebar */
+        aside { width: 260px; background-color: var(--sidebar-bg); color: white; display: flex; flex-direction: column; border-left: 1px solid rgba(255,255,255,0.1); }
+        .logo { padding: 20px; font-size: 20px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 10px; }
+        .logo span { color: var(--primary); }
+        .bots-nav { flex: 1; overflow-y: auto; padding: 10px; }
+        .bots-nav h3 { font-size: 12px; color: var(--text-light); margin-bottom: 10px; margin-top: 15px; text-transform: uppercase; }
+        .bot-item { padding: 10px 15px; margin-bottom: 5px; border-radius: 8px; cursor: pointer; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; }
+        .bot-item:hover { background-color: rgba(255,255,255,0.05); }
+        .bot-item.active { background-color: var(--primary); }
+        .bot-status { width: 8px; height: 8px; border-radius: 50%; }
+        .status-active { background-color: var(--success); box-shadow: 0 0 5px var(--success); }
+        .status-inactive { background-color: var(--text-light); }
+        
+        .add-bot-btn { margin: 20px; padding: 12px; background: rgba(255,255,255,0.1); border: 1px dashed rgba(255,255,255,0.3); color: white; text-align: center; border-radius: 8px; cursor: pointer; }
+        .add-bot-btn:hover { background: rgba(255,255,255,0.2); }
 
-        body {
-            font-family: 'Tajawal', sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background-color: #fff;
-        }
+        /* Main Content */
+        main { flex: 1; overflow-y: auto; padding: 30px; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        h1 { font-size: 24px; color: var(--sidebar-bg); }
 
-        h1, h2, h3 {
-            font-family: 'Cairo', sans-serif;
-            font-weight: 700;
-            line-height: 1.2;
-        }
+        /* Dashboard Grid */
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .card { background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); border: 1px solid var(--border); }
+        .card h3 { font-size: 16px; margin-bottom: 15px; color: var(--primary-dark); }
+        
+        .stat-value { font-size: 32px; font-weight: bold; color: var(--sidebar-bg); margin-bottom: 5px; }
+        .stat-label { color: var(--text-light); font-size: 14px; }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 2rem;
-        }
+        /* Forms */
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 8px; font-weight: 500; font-size: 14px; }
+        input, textarea, select { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; transition: border 0.3s; background: #fff; }
+        input:focus, textarea:focus { outline: none; border-color: var(--primary); }
+        
+        button.btn-primary { background: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: background 0.2s; }
+        button.btn-primary:hover { background: var(--primary-dark); }
+        button.btn-danger { background: var(--danger); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+        
+        /* Giveaways Table */
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: right; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-light); font-size: 13px; font-weight: 500; }
+        .badge { padding: 4px 8px; border-radius: 20px; font-size: 11px; font-weight: bold; }
+        .badge-active { background: #dcfce7; color: #166534; }
+        .badge-ended { background: #fee2e2; color: #991b1b; }
 
-        /* شريط التنقل */
-        .navbar {
-            background-color: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            position: fixed;
-            width: 100%;
-            top: 0;
-            z-index: 1000;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            transition: all 0.3s ease;
-        }
+        /* Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.open { display: flex; }
+        .modal-content { background: white; padding: 30px; border-radius: 12px; width: 400px; max-width: 90%; }
+        .modal-header { display: flex; justify-content: space-between; margin-bottom: 20px; }
+        .close-btn { cursor: pointer; font-size: 20px; }
 
-        .navbar .container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1rem 2rem;
-        }
+        /* Toast */
+        .toast { position: fixed; bottom: 20px; right: 20px; background: var(--sidebar-bg); color: white; padding: 12px 24px; border-radius: 8px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 2000; }
+        .toast.show { opacity: 1; }
 
-        .logo {
-            font-family: 'Cairo', sans-serif;
-            font-size: 1.8rem;
-            font-weight: 900;
-            color: var(--primary-color);
-            text-decoration: none;
-        }
+        /* Utility */
+        .hidden { display: none; }
+        .empty-state { text-align: center; padding: 50px; color: var(--text-light); }
+        .empty-icon { font-size: 48px; margin-bottom: 10px; display: block; }
 
-        .nav-menu a {
-            color: var(--dark-color);
-            text-decoration: none;
-            margin-right: 1.5rem;
-            font-weight: 500;
-            transition: color 0.3s ease;
-        }
+        /* Tabs */
+        .tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+        .tab { padding: 10px 0; cursor: pointer; color: var(--text-light); border-bottom: 2px solid transparent; font-weight: 500; }
+        .tab.active { color: var(--primary); border-color: var(--primary); }
 
-        .nav-menu a:hover {
-            color: var(--primary-color);
-        }
-
-        /* قسم البطل (Hero Section) */
-        .hero {
-            background: linear-gradient(rgba(0, 123, 255, 0.8), rgba(0, 123, 255, 0.8)), url('https://images.unsplash.com/photo-1557804506-669a67965ba0?q=80&w=2070&auto=format&fit=crop') no-repeat center center/cover;
-            height: 100vh;
-            display: flex;
-            align-items: center;
-            text-align: center;
-            color: #fff;
-            padding-top: 80px; /* مساحة للشريط الثابت */
-        }
-
-        .hero-content h1 {
-            font-size: 3.5rem;
-            margin-bottom: 1rem;
-        }
-
-        .hero-content p {
-            font-size: 1.3rem;
-            max-width: 600px;
-            margin: 0 auto 2rem auto;
-        }
-
-        .btn {
-            display: inline-block;
-            padding: 0.8rem 2rem;
-            border-radius: 50px;
-            text-decoration: none;
-            font-weight: bold;
-            transition: all 0.3s ease;
-            border: 2px solid transparent;
-        }
-
-        .btn-primary {
-            background-color: var(--accent-color);
-            color: var(--dark-color);
-        }
-
-        .btn-primary:hover {
-            background-color: #e0a800;
-            transform: translateY(-3px);
-        }
-
-        /* قسم الخدمات */
-        .services {
-            padding: 5rem 0;
-            background-color: var(--light-color);
-        }
-        .section-title {
-            text-align: center;
-            font-size: 2.5rem;
-            margin-bottom: 3rem;
-            color: var(--dark-color);
-        }
-        .services-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 2rem;
-        }
-        .service-card {
-            background: #fff;
-            padding: 2rem;
-            text-align: center;
-            border-radius: 8px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-        .service-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-        }
-        .service-card .icon {
-            font-size: 3rem;
-            color: var(--primary-color);
-            margin-bottom: 1rem;
-        }
-        .service-card h3 {
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
-        }
-
-        /* قسم معرض الأعمال */
-        .portfolio {
-            padding: 5rem 0;
-        }
-        .portfolio-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 2rem;
-        }
-        .portfolio-item {
-            position: relative;
-            overflow: hidden;
-            border-radius: 8px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-            cursor: pointer;
-        }
-        .portfolio-item img {
-            width: 100%;
-            height: 250px;
-            object-fit: cover;
-            transition: transform 0.5s ease;
-        }
-        .portfolio-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            color: #fff;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-        .portfolio-item:hover .portfolio-overlay {
-            opacity: 1;
-        }
-        .portfolio-item:hover img {
-            transform: scale(1.1);
-        }
-        .portfolio-overlay h3 {
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
-        }
-        .portfolio-overlay p {
-            font-size: 1rem;
-            color: var(--accent-color);
-        }
-
-        /* قسم آراء العملاء */
-        .testimonials {
-            padding: 5rem 0;
-            background-color: var(--light-color);
-            text-align: center;
-        }
-        .testimonial-quote {
-            font-size: 1.5rem;
-            font-style: italic;
-            color: var(--secondary-color);
-            max-width: 800px;
-            margin: 0 auto 2rem auto;
-        }
-        .testimonial-author {
-            font-weight: bold;
-            color: var(--dark-color);
-        }
-
-        /* قسم الدعوة لاتخاذ إجراء (CTA) */
-        .cta {
-            background-color: var(--primary-color);
-            color: #fff;
-            padding: 4rem 0;
-            text-align: center;
-        }
-        .cta h2 {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-        }
-        .btn-light {
-            background-color: #fff;
-            color: var(--primary-color);
-        }
-        .btn-light:hover {
-            background-color: var(--light-color);
-        }
-
-        /* التذييل (Footer) */
-        .main-footer {
-            background-color: var(--dark-color);
-            color: #fff;
-            padding: 3rem 0 1rem 0;
-        }
-        .footer-content {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 2rem;
-            margin-bottom: 2rem;
-        }
-        .footer-section h3 {
-            margin-bottom: 1rem;
-            color: var(--accent-color);
-        }
-        .footer-section p, .footer-section ul {
-            color: #ccc;
-        }
-        .footer-section ul {
-            list-style: none;
-        }
-        .footer-section ul li a {
-            color: #ccc;
-            text-decoration: none;
-            transition: color 0.3s ease;
-        }
-        .footer-section ul li a:hover {
-            color: var(--accent-color);
-        }
-        .social-icons a {
-            color: #fff;
-            font-size: 1.5rem;
-            margin-left: 1rem;
-            transition: color 0.3s ease;
-        }
-        .social-icons a:hover {
-            color: var(--accent-color);
-        }
-        .footer-bottom {
-            text-align: center;
-            padding-top: 1.5rem;
-            border-top: 1px solid #555;
-            color: #999;
-        }
-
-        /* تصميم متجاوب */
-        @media (max-width: 768px) {
-            .hero-content h1 { font-size: 2.5rem; }
-            .hero-content p { font-size: 1.1rem; }
-            .navbar .container { flex-direction: column; }
-            .nav-menu { margin-top: 1rem; }
-            .nav-menu a { margin: 0 0.5rem; }
-            .section-title { font-size: 2rem; }
-        }
+        .bot-running { display: inline-flex; align-items: center; gap: 6px; background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold;}
+        .bot-stopped { display: inline-flex; align-items: center; gap: 6px; background: #f1f5f9; color: #64748b; padding: 4px 10px; border-radius: 20px; font-size: 12px;}
     </style>
 </head>
 <body>
 
-    <!-- =============================================================================
-    هيكل HTML: أقسام الموقع المختلفة
-    ============================================================================= -->
-
-    <!-- شريط التنقل -->
-    <nav class="navbar">
-        <div class="container">
-            <a href="#" class="logo">نواة الرقمية</a>
-            <div class="nav-menu">
-                <a href="#services">خدماتنا</a>
-                <a href="#portfolio">أعمالنا</a>
-                <a href="#testimonials">آراء العملاء</a>
-                <a href="#contact">تواصل معنا</a>
-            </div>
+    <!-- Sidebar -->
+    <aside>
+        <div class="logo">
+            <span>⚡</span>
+            مدير البوتات
         </div>
-    </nav>
-
-    <!-- قسم البطل -->
-    <header class="hero">
-        <div class="hero-content">
-            <h1>نحول أفكارك إلى واقع رقمي مذهل</h1>
-            <p>نحن وكالة إبداعية متخصصة في تصميم وتطوير حلول رقمية مبتكرة تساعد علامتك التجارية على النمو والازدهار.</p>
-            <a href="#contact" class="btn btn-primary">ابدأ مشروعك الآن</a>
-        </div>
-    </header>
-
-    <main>
-        <!-- قسم الخدمات -->
-        <section id="services" class="services">
-            <div class="container">
-                <h2 class="section-title">خدماتنا</h2>
-                <div class="services-grid">
-                    <div class="service-card">
-                        <div class="icon"><i class="fas fa-code"></i></div>
-                        <h3>تطوير الويب</h3>
-                        <p>مواقع ويب سريعة، آمنة، ومتجاوبة باستخدام أحدث التقنيات.</p>
-                    </div>
-                    <div class="service-card">
-                        <div class="icon"><i class="fas fa-mobile-alt"></i></div>
-                        <h3>تطبيقات الجوال</h3>
-                        <p>تطبيقات ذكية وأنيقة لنظامي iOS و Android توفر تجربة مستخدم فريدة.</p>
-                    </div>
-                    <div class="service-card">
-                        <div class="icon"><i class="fas fa-paint-brush"></i></div>
-                        <h3>تصميم UI/UX</h3>
-                        <p>واجهات جذابة وسهلة الاستخدام تضع المستخدم في مقدمة الأولويات.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- قسم معرض الأعمال -->
-        <section id="portfolio" class="portfolio">
-            <div class="container">
-                <h2 class="section-title">أحدث أعمالنا</h2>
-                <div class="portfolio-grid">
-                    <?php foreach ($portfolio_items as $item): ?>
-                        <div class="portfolio-item">
-                            <img src="<?php echo htmlspecialchars($item['image_url']); ?>" alt="<?php echo htmlspecialchars($item['title']); ?>">
-                            <div class="portfolio-overlay">
-                                <h3><?php echo htmlspecialchars($item['title']); ?></h3>
-                                <p><?php echo htmlspecialchars($item['category']); ?></p>
-                            </div>
+        <div class="bots-nav">
+            <h3>بوتاتي</h3>
+            <?php if (empty($bots_list)): ?>
+                <div style="padding: 15px; font-size: 13px; color: var(--text-light);">لا توجد بوتات حالياً</div>
+            <?php else: ?>
+                <?php foreach ($bots_list as $bot): ?>
+                    <div class="bot-item <?= ($active_bot_id === $bot['id']) ? 'active' : '' ?>" onclick="location.href='home.php?bot=<?=$bot['id']?>'">
+                        <div>
+                            <div style="font-weight: bold; font-size: 14px;"><?= $bot['name'] ?></div>
+                            <div style="font-size: 11px; color: var(--text-light);">@<?php echo explode(':', $bot['token'])[0]; ?></div>
                         </div>
-                    <?php endforeach; ?>
+                        <div class="bot-status <?= ($bot['status'] === 'active') ? 'status-active' : 'status-inactive' ?>"></div>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+            
+            <div class="add-bot-btn" onclick="openModal('addBotModal')">+ إضافة بوت جديد</div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main>
+        <?php if ($current_bot): ?>
+            <header>
+                <div>
+                    <h1><?= $current_bot['name'] ?></h1>
+                    <div style="margin-top: 5px; color: var(--text-light); font-size: 14px;">
+                        الأيدي: <code><?= $current_bot['admin_id'] ?></code> 
+                        • الحالة: <?= ($current_bot['status'] == 'active') ? '<span class="bot-running">● يعمل</span>' : '<span class="bot-stopped">○ متوقف</span>' ?>
+                    </div>
                 </div>
-            </div>
-        </section>
+                <?php if($current_bot['status'] == 'active'): ?>
+                    <button class="btn-danger" onclick="toggleBot('<?= $current_bot['id'] ?>', 'inactive')">إيقاف البوت</button>
+                <?php else: ?>
+                    <button class="btn-primary" onclick="toggleBot('<?= $current_bot['id'] ?>', 'active')">تشغيل البوت</button>
+                <?php endif; ?>
+            </header>
 
-        <!-- قسم آراء العملاء -->
-        <section id="testimonials" class="testimonials">
-            <div class="container">
-                <h2 class="section-title">ماذا يقول عملاؤنا</h2>
-                <p class="testimonial-quote">"فريق نواة الرقمية احترافي للغاية. لقد حولوا رؤيتنا إلى منصة إلكترونية تفوقت على توقعاتنا. ننصح بهم بشدة!"</p>
-                <p class="testimonial-author">- سارة أحمد، مديرة مشروع في شركة "الأفق"</p>
+            <div class="tabs">
+                <div class="tab <?= ($tab == 'dashboard') ? 'active' : '' ?>" onclick="switchTab('dashboard')">لوحة المعلومات</div>
+                <div class="tab <?= ($tab == 'giveaways') ? 'active' : '' ?>" onclick="switchTab('giveaways')">السحوبات</div>
+                <div class="tab <?= ($tab == 'settings') ? 'active' : '' ?>" onclick="switchTab('settings')">الإعدادات</div>
             </div>
-        </section>
 
-        <!-- قسم الدعوة لاتخاذ إجراء -->
-        <section id="contact" class="cta">
-            <div class="container">
-                <h2>هل أنت مستعد لبدء مشروعك؟</h2>
-                <p>تواصل معنا اليوم واحصل على استشارة مجانية</p>
-                <a href="mailto:info@nawaa.com" class="btn btn-light">تواصل معنا</a>
+            <!-- Dashboard Tab -->
+            <?php if ($tab == 'dashboard'): ?>
+                <div class="grid">
+                    <div class="card">
+                        <h3>المشتركين في البوت</h3>
+                        <div class="stat-value">0</div>
+                        <div class="stat-label">إجمالي المستخدمين</div>
+                    </div>
+                    <div class="card">
+                        <h3>السحوبات النشطة</h3>
+                        <div class="stat-value">
+                            <?php 
+                            $active_g = 0;
+                            foreach($current_bot['giveaways'] as $g) if($g['status'] == 'active') $active_g++;
+                            echo $active_g;
+                            ?>
+                        </div>
+                        <div class="stat-label">جارية الآن</div>
+                    </div>
+                    <div class="card">
+                        <h3>القنوات المضافة</h3>
+                        <div class="stat-value"><?= count($current_bot['settings']['channel_links']) ?></div>
+                        <div class="stat-label">قنوات إلزامية</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>سجل النشاط</h3>
+                    <div style="height: 200px; background: #f8fafc; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--text-light); font-size: 13px;">
+                        <div style="text-align: center;">
+                            <span style="font-size: 24px; display: block; margin-bottom: 10px;">📜</span>
+                            لا توجد نشاطات مؤرشفة حالياً
+                        </div>
+                    </div>
+                </div>
+
+            <!-- Giveaways Tab -->
+            <?php elseif ($tab == 'giveaways'): ?>
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3>قائمة السحوبات</h3>
+                        <button class="btn-primary" onclick="openModal('createGiveawayModal')">سحب جديد</button>
+                    </div>
+                    
+                    <?php if (empty($current_bot['giveaways'])): ?>
+                        <div class="empty-state">
+                            <span class="empty-icon">🎁</span>
+                            لم تقم بإنشاء أي سحوبات بعد
+                        </div>
+                    <?php else: ?>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>الجائزة</th>
+                                        <th>عدد الفائزين</th>
+                                        <th>الحالة</th>
+                                        <th>المشاركين</th>
+                                        <th>إجراء</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($current_bot['giveaways'] as $g): ?>
+                                    <tr>
+                                        <td>
+                                            <strong><?= $g['prize'] ?></strong><br>
+                                            <span style="font-size: 12px; color: var(--text-light);"><?= $g['title'] ?></span>
+                                        </td>
+                                        <td><?= $g['winners_count'] ?></td>
+                                        <td>
+                                            <span class="badge <?= ($g['status'] == 'active') ? 'badge-active' : 'badge-ended' ?>">
+                                                <?= ($g['status'] == 'active') ? 'جاري' : 'منتهي' ?>
+                                            </span>
+                                        </td>
+                                        <td><?= count($g['participants']) ?></td>
+                                        <td>
+                                            <button class="btn-primary" style="padding: 5px 10px; font-size: 12px;" onclick="alert('سيتم اختيار فائز عشوائي للمشاركين')">اختار فائز</button>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+            <!-- Settings Tab -->
+            <?php elseif ($tab == 'settings'): ?>
+                <div class="card" style="max-width: 600px;">
+                    <h3>إعدادات البوت</h3>
+                    <form action="home.php" method="POST">
+                        <input type="hidden" name="action" value="update_settings">
+                        <input type="hidden" name="bot_id" value="<?= $current_bot['id'] ?>">
+                        
+                        <div class="form-group">
+                            <label>أيدي المدير (Admin ID)</label>
+                            <input type="text" name="admin_id" value="<?= $current_bot['admin_id'] ?>" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>القنوات/المجموعات الإلزامية (رابط أو يوزر)</label>
+                            <textarea name="channels" rows="5" placeholder="ضع كل رابط في سطر جديد&#10;@channel1&#10;https://t.me/channel2"><?= implode("\n", $current_bot['settings']['channel_links']) ?></textarea>
+                            <small style="color: var(--text-light);">يجب على المستخدم الانضمام لهذه القنوات للمشاركة في السحب.</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="require_join" <?= $current_bot['settings']['required_members'] ? 'checked' : '' ?> style="width: auto;">
+                                إلزام الاشتراك في القنوات (تحقق تلقائي)
+                            </label>
+                        </div>
+
+                        <div class="form-group">
+                            <label>رسالة البداية</label>
+                            <textarea rows="3" placeholder="أهلاً بك في بوت السحوبات..."></textarea>
+                        </div>
+
+                        <button type="submit" class="btn-primary">حفظ الإعدادات</button>
+                    </form>
+                    
+                    <hr style="margin: 30px 0; border: none; border-top: 1px solid var(--border);">
+                    
+                    <h3 style="color: var(--danger);">منطقة الخطر</h3>
+                    <form action="home.php" method="POST" onsubmit="return confirm('هل أنت متأكد من حذف هذا البوت؟ لا يمكن التراجع عن هذا الإجراء.');">
+                        <input type="hidden" name="action" value="delete_bot">
+                        <input type="hidden" name="bot_id" value="<?= $current_bot['id'] ?>">
+                        <button type="submit" class="btn-danger">حذف البوت نهائياً</button>
+                    </form>
+                </div>
+            <?php endif; ?>
+
+        <?php else: ?>
+            <!-- Welcome State -->
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center;">
+                <div style="font-size: 60px; margin-bottom: 20px;">👋</div>
+                <h1 style="margin-bottom: 10px;">مرحباً بك في مدير السحوبات</h1>
+                <p style="color: var(--text-light); max-width: 500px; margin-bottom: 30px;">
+                    قم بإضافة بوت تليجرام جديد للبدء في إدارة السحوبات والتفاعل مع أعضاء قنواتك بسهولة.
+                </p>
+                <button class="btn-primary" onclick="openModal('addBotModal')">إضافة بوت جديد</button>
             </div>
-        </section>
+        <?php endif; ?>
     </main>
 
-    <!-- التذييل -->
-    <footer class="main-footer">
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-section">
-                    <h3>نواة الرقمية</h3>
-                    <p>شريكك الموثوق في رحلة التحول الرقمي. نحن نؤمن بقوة الأفكار الإبداعية والتقنية المتقدمة.</p>
-                </div>
-                <div class="footer-section">
-                    <h3>روابط سريعة</h3>
-                    <ul>
-                        <li><a href="#services">خدماتنا</a></li>
-                        <li><a href="#portfolio">أعمالنا</a></li>
-                        <li><a href="#testimonials">آراء العملاء</a></li>
-                    </ul>
-                </div>
-                <div class="footer-section">
-                    <h3>تابعنا</h3>
-                    <div class="social-icons">
-                        <a href="#"><i class="fab fa-facebook-f"></i></a>
-                        <a href="#"><i class="fab fa-twitter"></i></a>
-                        <a href="#"><i class="fab fa-instagram"></i></a>
-                        <a href="#"><i class="fab fa-linkedin-in"></i></a>
-                    </div>
-                </div>
+    <!-- Modal: Add Bot -->
+    <div id="addBotModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>إضافة بوت جديد</h3>
+                <span class="close-btn" onclick="closeModal('addBotModal')">&times;</span>
             </div>
-            <div class="footer-bottom">
-                <p>&copy; <?php echo date('Y'); ?> نواة الرقمية. جميع الحقوق محفوظة.</p>
-            </div>
+            <form action="home.php" method="POST">
+                <input type="hidden" name="action" value="create_bot">
+                <div class="form-group">
+                    <label>اسم البوت (داخلي)</label>
+                    <input type="text" name="bot_name" placeholder="مثال: بوت قناتي الرسمي" required>
+                </div>
+                <div class="form-group">
+                    <label>توكن البوت (Token)</label>
+                    <input type="text" name="bot_token" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" required>
+                    <small style="color: var(--text-light);">احصل عليه من @BotFather</small>
+                </div>
+                <div class="form-group">
+                    <label>أيدي المدير (Your Admin ID)</label>
+                    <input type="text" name="admin_id" placeholder="رقم الأيدي الخاص بحسابك" required>
+                    <small style="color: var(--text-light);">احصل عليه من بوت @userinfobot</small>
+                </div>
+                <button type="submit" class="btn-primary" style="width: 100%;">إضافة البوت</button>
+            </form>
         </div>
-    </footer>
+    </div>
 
+    <!-- Modal: Create Giveaway -->
+    <div id="createGiveawayModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>إنشاء سحب جديد</h3>
+                <span class="close-btn" onclick="closeModal('createGiveawayModal')">&times;</span>
+            </div>
+            <form action="home.php" method="POST">
+                <input type="hidden" name="action" value="create_giveaway">
+                <input type="hidden" name="bot_id" value="<?= $active_bot_id ?>">
+                
+                <div class="form-group">
+                    <label>عنوان السحب</label>
+                    <input type="text" name="g_title" placeholder="سحب بمناسبة الوصول لـ 10k مشترك" required>
+                </div>
+                <div class="form-group">
+                    <label>الجائزة</label>
+                    <input type="text" name="g_prize" placeholder="iPhone 15 Pro" required>
+                </div>
+                <div class="form-group">
+                    <label>عدد الفائزين</label>
+                    <input type="number" name="g_winners" value="1" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label>تاريخ النهاية</label>
+                    <input type="datetime-local" name="g_end_date" required>
+                </div>
+                <button type="submit" class="btn-primary" style="width: 100%;">انشاء السحب</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">تم بنجاح!</div>
+
+    <script>
+        function openModal(id) {
+            document.getElementById(id).classList.add('open');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('open');
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.classList.remove('open');
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.innerText = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        function switchTab(tabName) {
+            // Reload page with new tab for simplicity in PHP architecture
+            // preserving bot ID
+            const botId = '<?= $active_bot_id ?? "" ?>';
+            window.location.href = `home.php?bot=${botId}&tab=${tabName}`;
+        }
+
+        function toggleBot(botId, newStatus) {
+            // Since this is a simple file based "simulator", 
+            // we use a hidden form approach or fetch to update status
+            const bots = <?= json_encode($bots_list) ?>;
+            const botIndex = bots.findIndex(b => b.id === botId);
+            
+            if(botIndex !== -1) {
+                // In a real app, this would be an AJAX call
+                // Here we just simulate UI feedback
+                fetch('home.php', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: `action=toggle_status&bot_id=${botId}&status=${newStatus}`
+                }).then(() => {
+                   location.reload(); 
+                });
+            }
+        }
+    </script>
 </body>
 </html>
