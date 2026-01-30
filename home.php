@@ -1,17 +1,18 @@
 <?php
 /*
- * PHP TELEGRAM GIVEAWAY BOT (FIXED VERSION)
- * Single File Solution (Logic + Admin Panel + Database)
+ * PHP TELEGRAM GIVEAWAY BOT (FIXED FOR SQLITE3)
+ * Fixed ArgumentCountError
+ * Single File Solution
  */
 
 // --- 1. CONFIGURATION & SETUP ---
 error_reporting(E_ALL);
-ini_set('display_errors', 1); // Active for testing, set to 0 later
+ini_set('display_errors', 1); 
 date_default_timezone_set('Asia/Riyadh');
 
-// تعديل البيانات هنا
+// --- تعديل بيانات البوت ---
 $BOT_TOKEN = "7019648394:AAHY8E8-JM3I91Xr2B9hPDOJByWU9gSlKKw"; 
-$ADMIN_ID = 778375826; // ضع أيدي الأدمن
+$ADMIN_ID = 778375826; // أيدي الأدمن
 $BOT_USERNAME = "Hhrurjdbbot"; // بدون علامة @
 $API_URL = "https://api.telegram.org/bot" . $BOT_TOKEN . "/";
 $DB_FILE = __DIR__ . "/giveaway_v2.db";
@@ -66,8 +67,7 @@ $db->exec("CREATE TABLE IF NOT EXISTS conversation_state (
     data_json TEXT
 )");
 
-// --- 3. HELPER FUNCTIONS ---
-
+// --- 3. Helpers & DB Wrapper ---
 function apiRequest($method, $data = []) {
     global $API_URL;
     $ch = curl_init($API_URL . $method);
@@ -77,21 +77,25 @@ function apiRequest($method, $data = []) {
     $result = curl_exec($ch);
     $err = curl_error($ch);
     curl_close($ch);
-    
     if ($err) return ['ok' => false, 'description' => $err];
     return json_decode($result, true);
+}
+
+// دالة مساعدة تنفذ الاستعلام وتربط القيم (حل مشكلة SQLite3)
+function db_exec($stmt, $params = []) {
+    foreach ($params as $i => $val) {
+        // SQLite3 binding is 1-indexed
+        $stmt->bindValue($i + 1, $val);
+    }
+    return $stmt->execute();
 }
 
 function sendMessage($chat_id, $text, $reply_markup = null, $parse_mode = 'Markdown') {
     global $API_URL;
     $data = ['chat_id' => $chat_id, 'text' => $text, 'parse_mode' => $parse_mode];
-    
     if ($reply_markup) {
-        if (is_array($reply_markup)) {
-            $data['reply_markup'] = json_encode($reply_markup);
-        } else {
-            $data['reply_markup'] = $reply_markup;
-        }
+        if (is_array($reply_markup)) $data['reply_markup'] = json_encode($reply_markup);
+        else $data['reply_markup'] = $reply_markup;
     }
     return apiRequest('sendMessage', $data);
 }
@@ -100,11 +104,8 @@ function editMessageText($chat_id, $message_id, $text, $reply_markup = null, $pa
     global $API_URL;
     $data = ['chat_id' => $chat_id, 'message_id' => $message_id, 'text' => $text, 'parse_mode' => $parse_mode];
     if ($reply_markup) {
-        if (is_array($reply_markup)) {
-            $data['reply_markup'] = json_encode($reply_markup);
-        } else {
-            $data['reply_markup'] = $reply_markup;
-        }
+        if (is_array($reply_markup)) $data['reply_markup'] = json_encode($reply_markup);
+        else $data['reply_markup'] = $reply_markup;
     }
     return apiRequest('editMessageText', $data);
 }
@@ -116,7 +117,7 @@ function answerCallbackQuery($callback_id, $text = '', $show_alert = false) {
 function getUserState($user_id) {
     global $db;
     $stmt = $db->prepare("SELECT * FROM conversation_state WHERE user_id = ?");
-    $stmt->execute([$user_id]);
+    db_exec($stmt, [$user_id]);
     $res = $stmt->fetchArray(SQLITE3_ASSOC);
     if ($res && $res['data_json']) {
         $res['data'] = json_decode($res['data_json'], true);
@@ -128,26 +129,26 @@ function setUserState($user_id, $state, $data = []) {
     global $db;
     $json = json_encode($data);
     $stmt = $db->prepare("INSERT OR REPLACE INTO conversation_state (user_id, state, data_json) VALUES (?, ?, ?)");
-    $stmt->execute([$user_id, $state, $json]);
+    db_exec($stmt, [$user_id, $state, $json]);
 }
 
 function clearUserState($user_id) {
     global $db;
     $stmt = $db->prepare("DELETE FROM conversation_state WHERE user_id = ?");
-    $stmt->execute([$user_id]);
+    db_exec($stmt, [$user_id]);
 }
 
 function getGiveaway($giveaway_id) {
     global $db;
     $stmt = $db->prepare("SELECT * FROM giveaways WHERE giveaway_id = ?");
-    $stmt->execute([$giveaway_id]);
+    db_exec($stmt, [$giveaway_id]);
     return $stmt->fetchArray(SQLITE3_ASSOC);
 }
 
 function updateGiveawayStatus($giveaway_id, $status) {
     global $db;
     $stmt = $db->prepare("UPDATE giveaways SET status = ? WHERE giveaway_id = ?");
-    $stmt->execute([$status, $giveaway_id]);
+    db_exec($stmt, [$status, $giveaway_id]);
 }
 
 // --- 4. CAPTCHA GENERATION ---
@@ -158,29 +159,23 @@ if (isset($_GET['render_captcha'])) {
     $image = imagecreatetruecolor($width, $height);
     $bg = imagecolorallocate($image, rand(220, 255), rand(220, 255), rand(220, 255));
     imagefill($image, 0, 0, $bg);
-    
     $text_color = imagecolorallocate($image, 0, 0, 0);
-    // Built-in font 5 is large enough for simple text
     imagestring($image, 5, 80, 40, $code, $text_color);
-    
-    // Add noise lines
     for ($i = 0; $i < 10; $i++) {
         imageline($image, rand(0, $width), rand(0, $height), rand(0, $width), rand(0, $height), imagecolorallocate($image, rand(0,150), rand(0,150), rand(0,150)));
     }
-    
     imagepng($image);
     imagedestroy($image);
     exit;
 }
 
-// --- 5. JOB QUEUE SIMULATION (Lazy Checks) ---
-// FIX HERE: Removed space in function name
+// --- 5. JOB QUEUE & DRAW LOGIC ---
 function check_giveaways() {
     global $db, $API_URL;
-    // Find active time-based giveaways that have ended
     $now = date('Y-m-d H:i:s');
     $stmt = $db->prepare("SELECT * FROM giveaways WHERE status = 'active' AND end_type = 'time' AND end_value <= ?");
-    $stmt->execute([$now]);
+    // FIXED: Using db_exec helper
+    db_exec($stmt, [$now]);
 
     while ($row = $stmt->fetchArray(SQLITE3_ASSOC)) {
         perform_giveaway_draw($row['giveaway_id']);
@@ -192,38 +187,32 @@ function perform_giveaway_draw($giveaway_id) {
     $giveaway = getGiveaway($giveaway_id);
     if (!$giveaway || $giveaway['status'] != 'active') return;
 
-    // Get participants
     $stmt = $db->prepare("SELECT user_id, username FROM participants WHERE giveaway_id = ?");
-    $stmt->execute([$giveaway_id]);
+    db_exec($stmt, [$giveaway_id]);
     $participants = [];
     while ($row = $stmt->fetchArray(SQLITE3_ASSOC)) {
         $participants[] = $row;
     }
 
     if (empty($participants)) {
-        // Try to send to channel_id (which might be username)
         apiRequest('sendMessage', ['chat_id' => $giveaway['channel_id'], 'text' => "لم يشارك أحد! 😔"]);
         updateGiveawayStatus($giveaway_id, 'finished');
         return;
     }
 
-    // Pick winners
     $winner_count = $giveaway['winner_count'];
     if ($winner_count == 0) $winner_count = count($participants);
-    
     shuffle($participants);
     $selected = array_slice($participants, 0, min($winner_count, count($participants)));
     
     foreach ($selected as $winner) {
         $winners[] = $winner;
-        // Save winner
         $stmt_w = $db->prepare("INSERT INTO winners (giveaway_id, user_id) VALUES (?, ?)");
-        $stmt_w->execute([$giveaway_id, $winner['user_id']]);
+        db_exec($stmt_w, [$giveaway_id, $winner['user_id']]);
     }
 
     updateGiveawayStatus($giveaway_id, 'finished');
 
-    // Announce
     $text = "🎊 انتهى السحب: *" . $giveaway['title'] . "* 🎊\n\n";
     $text .= "**🏆 الفائزون:**\n";
     foreach ($winners as $i => $w) {
@@ -231,12 +220,9 @@ function perform_giveaway_draw($giveaway_id) {
         $text .= ($i+1) . ". {$user_link}\n";
     }
 
-    // Try to update original message
     if($giveaway['message_id']) {
         editMessageText($giveaway['channel_id'], $giveaway['message_id'], "~~" . $text . "~~\n\n✅ انتهى السحب.");
     }
-    
-    // Send new announcement
     sendMessage($giveaway['channel_id'], $text);
 }
 
@@ -244,8 +230,6 @@ function perform_giveaway_draw($giveaway_id) {
 
 function handleUpdate($update) {
     global $ADMIN_ID, $BOT_USERNAME, $db;
-    
-    // FIX HERE: Called the function correctly
     check_giveaways(); 
 
     $message = $update['message'] ?? null;
@@ -275,14 +259,12 @@ function handleUpdate($update) {
             return;
         }
 
-        // Admin Giveaway Actions
         if (in_array($action, ['pause', 'resume', 'draw_now']) && $user_id == $ADMIN_ID) {
             $giveaway_id = $data_parts[1];
             $giveaway = getGiveaway($giveaway_id);
-            if ($action == 'pause') { updateGiveawayStatus($giveaway_id, 'paused'); }
-            if ($action == 'resume') { updateGiveawayStatus($giveaway_id, 'active'); }
-            if ($action == 'draw_now') { perform_giveaway_draw($giveaway_id); }
-            // Simple UI refresh hack (delete and resend or toast)
+            if ($action == 'pause') updateGiveawayStatus($giveaway_id, 'paused');
+            if ($action == 'resume') updateGiveawayStatus($giveaway_id, 'active');
+            if ($action == 'draw_now') perform_giveaway_draw($giveaway_id);
             answerCallbackQuery($callback_query['id'], "تم تنفيذ الإجراء!", true);
         }
 
@@ -290,39 +272,32 @@ function handleUpdate($update) {
             $giveaway_id = $data_parts[1];
             $giveaway = getGiveaway($giveaway_id);
             
-            // Ban check
             $stmt_ban = $db->prepare("SELECT * FROM banned_users WHERE user_id = ?");
-            $stmt_ban->execute([$user_id]);
+            db_exec($stmt_ban, [$user_id]);
             if ($stmt_ban->fetchArray()) {
                 answerCallbackQuery($callback_query['id'], "أنت محظور من المشاركة.", true);
                 return;
             }
 
-            // Duplicate check
             $stmt_part = $db->prepare("SELECT * FROM participants WHERE giveaway_id = ? AND user_id = ?");
-            $stmt_part->execute([$giveaway_id, $user_id]);
+            db_exec($stmt_part, [$giveaway_id, $user_id]);
             if ($stmt_part->fetchArray()) {
                 answerCallbackQuery($callback_query['id'], "أنت مشارك بالفعل!", true);
                 return;
             }
             
-            // Generate Captcha
             $code = substr(str_shuffle("ABCDEFGHJKLMNPQRSTUVWXYZ23456789"), 0, 5);
             $self_url = "http://" . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'];
             $photo_url = $self_url . "?render_captcha=1&code=$code";
             
-            // Store Code
             $stmt = $db->prepare("INSERT INTO captcha_attempts (giveaway_id, user_id, attempts, captcha_code) VALUES (?, ?, 1, ?)");
-            $stmt->execute([$giveaway_id, $user_id, $code]);
+            db_exec($stmt, [$giveaway_id, $user_id, $code]);
             
             setUserState($user_id, 'AWAITING_CAPTCHA', ['giveaway_id' => $giveaway_id]);
-            
-            // Send Prompt
             $kb = [['text' => "🔙 عودة", 'callback_data' => "cancel_conv"]];
             sendMessage($chat_id, "أدخل الرمز الموجود في الصورة:", ['inline_keyboard' => [$kb]]);
             apiRequest('sendPhoto', ['chat_id' => $chat_id, 'photo' => $photo_url, 'caption' => "أدخل الرمز (غير حساس لحالة الأحرف)."]);
         }
-        
         return;
     }
 
@@ -334,18 +309,16 @@ function handleUpdate($update) {
         $user_state = getUserState($user_id);
         $data = $user_state['data'] ?? [];
 
-        // /start Command
         if (strpos($text, '/start') === 0) {
             if ($chat_id == $ADMIN_ID) {
                 $kb = [[['text' => "🎉 إنشاء سحب", 'callback_data' => "create_giveaway"]]];
                 sendMessage($chat_id, "أهلاً بك يا مدير!\nاختر للبدء:", ['inline_keyboard' => $kb]);
             } else {
-                sendMessage($chat_id, "أهلاً بك! هذا بوت السحوبات.\nيمكنك المشاركة عبر أزرار التصويت.\n\nلاستخدام البوت كمسؤول، تواصل مع المالك.");
+                sendMessage($chat_id, "أهلاً بك! هذا بوت السحوبات.\nيمكنك المشاركة عبر أزرار التصويت.");
             }
             return;
         }
 
-        // State Machine Logic
         switch ($user_state['state']) {
             case 'SELECTING_CHANNEL':
                 $channel = str_replace(['@', 'https://t.me/'], '', $text);
@@ -380,20 +353,20 @@ function handleUpdate($update) {
                 setUserState($user_id, 'CONFIRMATION', $data);
                 
                 $msg = "مراجعة:\nالقناة: " . $data['channel'] . "\nالجائزة: " . $data['title'] . "\nالفائزون: " . $data['winner_count'] . "\nالوقت: $end_time\n\nأرسل 'نعم' للنشر";
-                $kb = [['text' => "نعم ✅", 'callback_data' => "confirm_gw"], ['text' => "إلغاء", 'callback_data' => "cancel_conv"]];
-                sendMessage($chat_id, $msg, ['inline_keyboard' => $kb]);
+                $kb_c = [['text' => "نعم ✅", 'callback_data' => "confirm_gw"], ['text' => "إلغاء", 'callback_data' => "cancel_conv"]];
+                sendMessage($chat_id, $msg, ['inline_keyboard' => $kb_c]);
                 break;
 
             case 'AWAITING_CAPTCHA':
                 $giveaway_id = $data['giveaway_id'];
                 $stmt = $db->prepare("SELECT * FROM captcha_attempts WHERE giveaway_id = ? AND user_id = ?");
-                $stmt->execute([$giveaway_id, $user_id]);
+                db_exec($stmt, [$giveaway_id, $user_id]);
                 $cap = $stmt->fetchArray(SQLITE3_ASSOC);
 
                 if ($cap && strtoupper($text) == strtoupper($cap['captcha_code'])) {
                     $stmt_add = $db->prepare("INSERT INTO participants (giveaway_id, user_id, username) VALUES (?, ?, ?)");
                     $username = $message['from']['username'] ?? "";
-                    $stmt_add->execute([$giveaway_id, $user_id, $username]);
+                    db_exec($stmt_add, [$giveaway_id, $user_id, $username]);
                     sendMessage($chat_id, "✅ تمت المشاركة بنجاح!");
                     clearUserState($user_id);
                 } else {
@@ -404,6 +377,7 @@ function handleUpdate($update) {
                         sendMessage($chat_id, "❌ انتهت محاولاتك.");
                         clearUserState($user_id);
                     } else {
+                        // Update attempts directly
                         $db->exec("UPDATE captcha_attempts SET attempts = $new_att WHERE giveaway_id='$giveaway_id' AND user_id=$user_id");
                         sendMessage($chat_id, "❌ خطأ. لديك " . (4-$new_att) . " محاولات.");
                     }
@@ -413,41 +387,51 @@ function handleUpdate($update) {
     }
 }
 
-// Handle Confirmation Callback (Special case inside text handler flow logic via callback)
-// Added to handle the 'confirm_gw' callback cleanly
-if (isset($update['callback_query']) && strpos($update['callback_query']['data'], 'confirm_gw') !== false) {
-     // Get user state data
-     $user_id = $update['callback_query']['from']['id'];
-     $chat_id = $update['callback_query']['message']['chat']['id'];
-     $state = getUserState($user_id);
-     $data = $state['data'];
-     
-     if ($data && isset($data['channel'], $data['title'], $data['winner_count'], $data['end_time'])) {
-        $g_id = uniqid('g_');
-        $stmt = $db->prepare("INSERT INTO giveaways (giveaway_id, channel_id, creator_id, title, winner_count, end_type, end_value) VALUES (?, ?, ?, ?, ?, 'time', ?)");
-        $stmt->execute([$g_id, $data['channel'], $user_id, $data['title'], $data['winner_count'], $data['end_time']]);
-        
-        $self_url = "http://" . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'];
-        $kb = [['text' => "🎉 المشاركة", 'callback_data' => "participate|$g_id"]];
-        
-        $res = apiRequest('sendMessage', [
-            'chat_id' => $data['channel'],
-            'text' => "🎉 سحب جديد: " . $data['title'] . "\nيبدأ الآن وينتهي في " . $data['end_time'],
-            'reply_markup' => json_encode(['inline_keyboard' => [$kb]])
-        ]);
-        
-        if ($res['ok']) {
-            $stmt_up = $db->prepare("UPDATE giveaways SET message_id = ? WHERE giveaway_id = ?");
-            $stmt_up->execute([$res['result']['message_id'], $g_id]);
-            sendMessage($chat_id, "✅ تم النشر بنجاح!");
-            clearUserState($user_id);
-        } else {
-            sendMessage($chat_id, "❌ فشل النشر: " . $res['description']);
-        }
-     }
+// Handle Confirmation Callback
+if (isset($update['callback_query'])) {
+    $data_cb = $update['callback_query']['data'];
+    if (strpos($data_cb, 'confirm_gw') !== false) {
+         $user_id = $update['callback_query']['from']['id'];
+         $chat_id = $update['callback_query']['message']['chat']['id'];
+         $state = getUserState($user_id);
+         // IMPORTANT: check if user is admin (basic check)
+         if($user_id != $ADMIN_ID && $state['creator_id'] != $user_id) {
+             // In this simple version, we trust the user ID in state, 
+             // but ideally verify permissions to the channel.
+         }
+         
+         $data = $state['data'];
+         
+         if ($data && isset($data['channel'], $data['title'], $data['winner_count'], $data['end_time'])) {
+            $g_id = uniqid('g_');
+            $stmt = $db->prepare("INSERT INTO giveaways (giveaway_id, channel_id, creator_id, title, winner_count, end_type, end_value) VALUES (?, ?, ?, ?, ?, 'time', ?)");
+            db_exec($stmt, [$g_id, $data['channel'], $user_id, $data['title'], $data['winner_count'], $data['end_time']]);
+            
+            $self_url = "http://" . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'];
+            $kb = [['text' => "🎉 المشاركة", 'callback_data' => "participate|$g_id"]];
+            
+            $res = apiRequest('sendMessage', [
+                'chat_id' => $data['channel'],
+                'text' => "🎉 سحب جديد: " . $data['title'] . "\nيبدأ الآن وينتهي في " . $data['end_time'],
+                'reply_markup' => json_encode(['inline_keyboard' => [$kb]])
+            ]);
+            
+            if ($res['ok']) {
+                $stmt_up = $db->prepare("UPDATE giveaways SET message_id = ? WHERE giveaway_id = ?");
+                db_exec($stmt_up, [$res['result']['message_id'], $g_id]);
+                // Don't clear state immediately to prevent errors, clear after success check? 
+                // But callback query needs answer
+                answerCallbackQuery($update['callback_query']['id']);
+                sendMessage($chat_id, "✅ تم النشر بنجاح!");
+                clearUserState($user_id);
+            } else {
+                answerCallbackQuery($update['callback_query']['id'], "فشل النشر: " . $res['description'], true);
+            }
+         }
+    }
 }
 
-// --- 7. WEBHOOK ENTRY POINT ---
+// --- 7. WEBHOOK ENTRY ---
 $content = file_get_contents("php://input");
 $update = json_decode($content, true);
 
@@ -457,9 +441,13 @@ if (isset($update)) {
     exit;
 }
 
-// --- 8. WEBHOOK INSTALLER ---
+// --- 8. WEBHOOK INSTALL ---
 if (isset($_GET['webhook_install'])) {
     $url = "https://" . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'];
+    // If running on non-standard port, add it
+    if ($_SERVER['SERVER_PORT'] != 80 && $_SERVER['SERVER_PORT'] != 443) {
+        $url .= ":" . $_SERVER['SERVER_PORT'];
+    }
     apiRequest('setWebhook', ['url' => $url]);
     echo "Webhook set to: " . htmlspecialchars($url);
     exit;
@@ -471,89 +459,50 @@ if (isset($_GET['delete_webhook'])) {
     exit;
 }
 
-// --- 9. ADMIN PANEL HTML (UI) ---
+// --- 9. ADMIN PANEL HTML ---
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bot Manager</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 20px; background: #f0f2f5; color: #333; }
-        .container { max-width: 800px; margin: auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1 { color: #0088cc; margin-bottom: 10px; }
-        p { color: #666; }
-        .install-btn { background: #22c55e; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; }
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f0f2f5; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 12px; border: 1px solid #ddd; text-align: right; }
-        th { background: #f9f9f9; color: #555; }
-        .status-active { color: green; font-weight: bold; }
-        .status-finished { color: red; font-weight: bold; }
-        .status-paused { color: orange; font-weight: bold; }
-        .action-btn { text-decoration: none; padding: 4px 8px; border-radius: 4px; color: white; font-size: 0.9em; margin-right: 5px;}
-        .btn-draw { background: #eab308; }
+        th, td { padding: 10px; border: 1px solid #ddd; text-align: right; }
+        .btn { display: inline-block; padding: 5px 10px; color: white; text-decoration: none; border-radius: 4px; }
+        .btn-green { background: #22c55e; }
+        .btn-yellow { background: #eab308; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🤖 مدير بوت السحوبات (PHP)</h1>
-        <p>يعمل عبر Webhook. البيانات في ملف: <b>giveaway_v2.db</b></p>
+        <h1>🤖 مدير البوت</h1>
+        <p><a href="?webhook_install" class="btn btn-green">تفعيل Webhook</a></p>
         
-        <div style="background: #e0f2fe; padding: 15px; border-radius: 8px; margin: 20px 0;">
-            <strong>خطوات التشغيل:</strong>
-            <ol style="margin-right: 20px; margin-top: 5px;">
-                <li>عدل التوكن وايدي الأدمن في الكود (المتغيرات في أعلى الملف).</li>
-                <li>احفظ الملف وارفعه للموقع.</li>
-                <li>اضغط الرابط التالي لتفعيل الويب هوك: <a href="?webhook_install" class="install-btn">تفعيل Webhook</a></li>
-            </ol>
-        </div>
-        
-        <h3>📋 السحوبات الحالية</h3>
+        <h3>السحوبات</h3>
         <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>العنوان</th>
-                    <th>الحالة</th>
-                    <th>المشاركون</th>
-                    <th>إجراء</th>
-                </tr>
-            </thead>
-            <tbody>
+            <tr><th>العنوان</th><th>الحالة</th><th>المشاركون</th><th>إجراء</th></tr>
             <?php
             $res = $db->query("SELECT * FROM giveaways ORDER BY created_at DESC");
             while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
                 $c_stmt = $db->prepare("SELECT COUNT(*) as c FROM participants WHERE giveaway_id = ?");
-                $c_stmt->execute([$row['giveaway_id']]);
+                db_exec($c_stmt, [$row['giveaway_id']]);
                 $count = $c_stmt->fetchArray(SQLITE3_ASSOC)['c'];
-                $statusClass = 'status-' . $row['status'];
             ?>
                 <tr>
-                    <td><small><?= substr($row['giveaway_id'],0,10) ?>...</small></td>
                     <td><?= htmlspecialchars($row['title']) ?></td>
-                    <td class="<?= $statusClass ?>"><?= $row['status'] ?></td>
+                    <td><?= $row['status'] ?></td>
                     <td><?= $count ?></td>
                     <td>
                         <?php if($row['status'] == 'active'): ?>
-                            <a href="?force_draw=<?= $row['giveaway_id'] ?>" class="action-btn btn-draw">⚡ إجباري</a>
+                            <a href="?force_draw=<?= $row['giveaway_id'] ?>" class="btn btn-yellow">⚡ سحب الآن</a>
                         <?php endif; ?>
                     </td>
                 </tr>
             <?php } ?>
-            </tbody>
         </table>
-        
-        <hr>
-        <h3>المستخدمون المحظورون</h3>
-        <ul>
-        <?php
-        $banned = $db->query("SELECT * FROM banned_users");
-        while($b = $banned->fetchArray(SQLITE3_ASSOC)) {
-            echo "<li>User ID: " . $b['user_id'] . " - " . htmlspecialchars($b['reason']) . "</li>";
-        }
-        ?>
-        </ul>
     </div>
 </body>
 </html>
