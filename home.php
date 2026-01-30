@@ -19,7 +19,7 @@ date_default_timezone_set('Asia/Riyadh');
 // تعديل البيانات هنا
 $BOT_TOKEN = "7019648394:AAHY8E8-JM3I91Xr2B9hPDOJByWU9gSlKKw"; 
 $ADMIN_ID = 778375826; // ضع أيدي الأدمن هنا
-$BOT_USERNAME = "YOUR_BOT_USERNAME"; // بدون علامة @
+$BOT_USERNAME = "Hhrurjdbbot"; // بدون علامة @
 $API_URL = "https://api.telegram.org/bot" . $BOT_TOKEN . "/";
 $DB_FILE = __DIR__ . "/giveaway_v2.db";
 
