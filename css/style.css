@@ -1,38 +1,22 @@
-/*
- * ملف style.css محسن لمشروع Auday Alozaib
- * يهدف هذا الملف إلى توفير تصميم عصري، متجاوب، وسهل الصيانة.
- * تم استخدام متغيرات CSS لتحسين قابلية التخصيص وإدارة الألوان والمسافات.
- * === الإصدار 2.0 - مع تحسينات بصرية وتفاعلية ===
- */
-
-/* ===================================
- * 1. المتغيرات الأساسية (CSS Variables)
- * =================================== */
 :root {
-    /* === لوحة ألوان عصرية ومحايدة === */
-    --primary-color: #4A90E2; /* أزرق هادئ وأنيق */
-    --primary-dark-color: #357ABD; /* أزرق داكن عند التحويم */
-    --secondary-color: #6C757D; /* رمادي ثانوي */
-    --accent-color: #5CB85C; /* أخضر زاهي للنجاح */
-    --danger-color: #E74C3C; /* أحمر قوي للخطر/الخطأ */
-    --text-color: #2C3E50; /* لون نص داكن وأكثر قراءة */
-    --light-text-color: #7F8C8D; /* لون نص فاتح للعناوين الثانوية */
-    --background-color: #ECF0F1; /* خلفية فاتحة جداً وراحة للعين */
-    --container-bg: rgba(255, 255, 255, 0.85); /* خلفية شفافة للتأثير الزجاجي */
-    --border-color: #BDC3C7; /* لون حدود واضح */
-    --shadow-color: rgba(44, 62, 80, 0.15); /* لون ظلال دافئ */
-
-    /* === مسافات وأبعاد محسّنة === */
+    --primary-color: #4A90E2;
+    --primary-dark-color: #357ABD;
+    --secondary-color: #6C757D;
+    --accent-color: #5CB85C;
+    --danger-color: #E74C3C;
+    --text-color: #2C3E50;
+    --light-text-color: #7F8C8D;
+    --background-color: #ECF0F1;
+    --container-bg: rgba(255, 255, 255, 0.85);
+    --border-color: #BDC3C7;
+    --shadow-color: rgba(44, 62, 80, 0.15);
     --spacing-xs: 0.5rem;
     --spacing-sm: 1rem;
     --spacing-md: 1.5rem;
     --spacing-lg: 2.5rem;
     --spacing-xl: 3.5rem;
-
-    --border-radius: 0.75rem; /* زوايا أكثر نعومة */
+    --border-radius: 0.75rem;
     --border-radius-lg: 1rem;
-
-    /* === خطوط عصرية === */
     --font-family-base: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     --font-size-base: 1rem;
     --font-size-sm: 0.875rem;
@@ -42,9 +26,6 @@
     --font-weight-bold: 700;
 }
 
-/* ===================================
- * 2. إعادة تعيين وتنسيقات عامة
- * =================================== */
 *,
 *::before,
 *::after {
@@ -67,7 +48,6 @@ body {
     direction: rtl;
     text-align: right;
     line-height: 1.7;
-    /* خلفية متدرجة بسيطة لإضافة عمق */
     background-image: 
         radial-gradient(circle at 20% 80%, rgba(74, 144, 226, 0.1) 0%, transparent 50%),
         radial-gradient(circle at 80% 20%, rgba(92, 184, 92, 0.1) 0%, transparent 50%),
@@ -92,9 +72,6 @@ h1, h2, h3 {
     line-height: 1.3;
 }
 
-/* ===================================
- * 3. تنسيقات الحاويات والمكونات الأساسية
- * =================================== */
 .container {
     background: var(--container-bg);
     padding: var(--spacing-lg) var(--spacing-xl);
@@ -106,11 +83,9 @@ h1, h2, h3 {
     max-width: 480px;
     text-align: center;
     margin: var(--spacing-md);
-    /* === تأثير الزجاج الضبابي (Glassmorphism) === */
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.18);
-    /* حركة بسيطة عند تحميل الصفحة */
     animation: fadeInUp 0.6s ease-out;
 }
 
@@ -159,9 +134,6 @@ h1, h2, h3 {
     background-color: #fff;
 }
 
-/* ===================================
- * 4. الأزرار
- * =================================== */
 .btn {
     display: inline-block;
     padding: var(--spacing-sm) var(--spacing-lg);
@@ -175,7 +147,7 @@ h1, h2, h3 {
     text-decoration: none;
     color: white;
     position: relative;
-    overflow: hidden; /* لإخفاء تأثير الموجة */
+    overflow: hidden;
 }
 
 .btn::before {
@@ -232,9 +204,6 @@ h1, h2, h3 {
     margin: 0;
 }
 
-/* ===================================
- * 5. رسائل التنبيه والحالة
- * =================================== */
 .message-box {
     padding: var(--spacing-sm) var(--spacing-md);
     border-radius: var(--border-radius);
@@ -262,9 +231,6 @@ h1, h2, h3 {
     border-color: #A9DFBF;
 }
 
-/* ===================================
- * 6. معلومات المستخدم
- * =================================== */
 .user-info {
     background-color: rgba(236, 240, 241, 0.5);
     padding: var(--spacing-md);
@@ -286,18 +252,12 @@ h1, h2, h3 {
     color: var(--text-color);
 }
 
-/* ===================================
- * 7. الروابط التبديلية (Switch Links)
- * =================================== */
 .switch-link {
     margin-top: var(--spacing-md);
     font-size: var(--font-size-sm);
     color: var(--light-text-color);
 }
 
-/* ===================================
- * 8. الاستجابة (Responsive Design)
- * =================================== */
 @media (max-width: 576px) {
     .container {
         padding: var(--spacing-md) var(--spacing-sm);
