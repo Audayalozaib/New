@@ -2,40 +2,44 @@
  * ملف style.css محسن لمشروع Auday Alozaib
  * يهدف هذا الملف إلى توفير تصميم عصري، متجاوب، وسهل الصيانة.
  * تم استخدام متغيرات CSS لتحسين قابلية التخصيص وإدارة الألوان والمسافات.
+ * === الإصدار 2.0 - مع تحسينات بصرية وتفاعلية ===
  */
 
 /* ===================================
  * 1. المتغيرات الأساسية (CSS Variables)
  * =================================== */
 :root {
-    /* الألوان */
-    --primary-color: #007bff; /* أزرق أساسي */
-    --primary-dark-color: #0056b3; /* أزرق داكن عند التحويم */
-    --secondary-color: #6c757d; /* رمادي ثانوي */
-    --accent-color: #28a745; /* أخضر للنجاح */
-    --danger-color: #dc3545; /* أحمر للخطر/الخطأ */
-    --text-color: #343a40; /* لون النص الأساسي */
-    --light-text-color: #6c757d; /* لون النص الفاتح */
-    --background-color: #f8f9fa; /* لون الخلفية الفاتح */
-    --container-bg: #ffffff; /* لون خلفية الحاويات */
-    --border-color: #e9ecef; /* لون الحدود */
-    --shadow-color: rgba(0, 0, 0, 0.1);
+    /* === لوحة ألوان عصرية ومحايدة === */
+    --primary-color: #4A90E2; /* أزرق هادئ وأنيق */
+    --primary-dark-color: #357ABD; /* أزرق داكن عند التحويم */
+    --secondary-color: #6C757D; /* رمادي ثانوي */
+    --accent-color: #5CB85C; /* أخضر زاهي للنجاح */
+    --danger-color: #E74C3C; /* أحمر قوي للخطر/الخطأ */
+    --text-color: #2C3E50; /* لون نص داكن وأكثر قراءة */
+    --light-text-color: #7F8C8D; /* لون نص فاتح للعناوين الثانوية */
+    --background-color: #ECF0F1; /* خلفية فاتحة جداً وراحة للعين */
+    --container-bg: rgba(255, 255, 255, 0.85); /* خلفية شفافة للتأثير الزجاجي */
+    --border-color: #BDC3C7; /* لون حدود واضح */
+    --shadow-color: rgba(44, 62, 80, 0.15); /* لون ظلال دافئ */
 
-    /* المسافات */
+    /* === مسافات وأبعاد محسّنة === */
     --spacing-xs: 0.5rem;
     --spacing-sm: 1rem;
     --spacing-md: 1.5rem;
-    --spacing-lg: 2rem;
-    --spacing-xl: 3rem;
+    --spacing-lg: 2.5rem;
+    --spacing-xl: 3.5rem;
 
-    /* نصف قطر الحدود */
-    --border-radius: 0.375rem; /* 6px */
+    --border-radius: 0.75rem; /* زوايا أكثر نعومة */
+    --border-radius-lg: 1rem;
 
-    /* الخطوط */
-    --font-family-base: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    /* === خطوط عصرية === */
+    --font-family-base: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     --font-size-base: 1rem;
     --font-size-sm: 0.875rem;
     --font-size-lg: 1.25rem;
+    --font-weight-normal: 400;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
 }
 
 /* ===================================
@@ -52,6 +56,7 @@
 body {
     font-family: var(--font-family-base);
     font-size: var(--font-size-base);
+    font-weight: var(--font-weight-normal);
     background-color: var(--background-color);
     color: var(--text-color);
     display: flex;
@@ -59,15 +64,20 @@ body {
     align-items: center;
     min-height: 100vh;
     margin: 0;
-    direction: rtl; /* دعم اللغة العربية */
+    direction: rtl;
     text-align: right;
-    line-height: 1.6;
+    line-height: 1.7;
+    /* خلفية متدرجة بسيطة لإضافة عمق */
+    background-image: 
+        radial-gradient(circle at 20% 80%, rgba(74, 144, 226, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(92, 184, 92, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 40% 40%, rgba(231, 76, 60, 0.05) 0%, transparent 50%);
 }
 
 a {
     color: var(--primary-color);
     text-decoration: none;
-    transition: color 0.3s ease;
+    transition: color 0.3s ease, text-decoration 0.3s ease;
 }
 
 a:hover {
@@ -75,15 +85,11 @@ a:hover {
     text-decoration: underline;
 }
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
+h1, h2, h3 {
     color: var(--text-color);
-    margin-bottom: var(--spacing-sm);
-    line-height: 1.2;
+    margin-bottom: var(--spacing-md);
+    font-weight: var(--font-weight-bold);
+    line-height: 1.3;
 }
 
 /* ===================================
@@ -92,24 +98,44 @@ h6 {
 .container {
     background: var(--container-bg);
     padding: var(--spacing-lg) var(--spacing-xl);
-    border-radius: var(--border-radius);
-    box-shadow: 0 0.5rem 1rem var(--shadow-color);
+    border-radius: var(--border-radius-lg);
+    box-shadow: 
+        0 8px 32px 0 var(--shadow-color),
+        0 2px 8px 0 rgba(0, 0, 0, 0.05);
     width: 100%;
-    max-width: 450px; /* زيادة طفيفة للعرض */
+    max-width: 480px;
     text-align: center;
     margin: var(--spacing-md);
+    /* === تأثير الزجاج الضبابي (Glassmorphism) === */
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    /* حركة بسيطة عند تحميل الصفحة */
+    animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .form-group {
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
     text-align: right;
 }
 
 .form-group label {
     display: block;
     margin-bottom: var(--spacing-xs);
-    font-weight: 600; /* خط أثقل قليلاً */
+    font-weight: var(--font-weight-semibold);
     color: var(--light-text-color);
+    font-size: var(--font-size-sm);
 }
 
 .form-group input[type="text"],
@@ -122,14 +148,15 @@ h6 {
     box-sizing: border-box;
     font-size: var(--font-size-base);
     color: var(--text-color);
-    background-color: #fdfdfd;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    background-color: rgba(255, 255, 255, 0.7);
+    transition: all 0.3s ease;
 }
 
 .form-group input:focus {
     border-color: var(--primary-color);
     outline: none;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.2);
+    background-color: #fff;
 }
 
 /* ===================================
@@ -137,94 +164,126 @@ h6 {
  * =================================== */
 .btn {
     display: inline-block;
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-lg);
     border: none;
     border-radius: var(--border-radius);
     font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
     cursor: pointer;
-    transition: background-color 0.3s ease, transform 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     text-align: center;
     text-decoration: none;
     color: white;
-    font-weight: 600;
+    position: relative;
+    overflow: hidden; /* لإخفاء تأثير الموجة */
+}
+
+.btn::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.5s, height 0.5s;
+}
+
+.btn:active::before {
+    width: 300px;
+    height: 300px;
 }
 
 .btn-primary {
     background-color: var(--primary-color);
+    box-shadow: 0 4px 15px 0 rgba(74, 144, 226, 0.3);
 }
 
 .btn-primary:hover {
     background-color: var(--primary-dark-color);
-    transform: translateY(-1px); /* تأثير بسيط عند التحويم */
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px 0 rgba(74, 144, 226, 0.4);
 }
 
 .btn-danger {
     background-color: var(--danger-color);
+    box-shadow: 0 4px 15px 0 rgba(231, 76, 60, 0.3);
 }
 
 .btn-danger:hover {
-    background-color: #c82333;
-    transform: translateY(-1px);
+    background-color: #C0392B;
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px 0 rgba(231, 76, 60, 0.4);
 }
 
-/* الأزرار في الصفحة الرئيسية */
 .home-buttons {
     margin-top: var(--spacing-lg);
     display: flex;
-    flex-wrap: wrap; /* للسماح بتجاوب أفضل على الشاشات الصغيرة */
+    flex-wrap: wrap;
     justify-content: center;
-    gap: var(--spacing-sm); /* مسافة بين الأزرار */
+    gap: var(--spacing-sm);
 }
 
 .home-buttons .btn {
-    flex: 1 1 calc(50% - var(--spacing-sm)); /* زرين في الصف مع مسافة */
-    max-width: 200px; /* تحديد أقصى عرض للزر */
-    margin: 0; /* إزالة الهوامش القديمة */
+    flex: 1 1 calc(50% - var(--spacing-sm));
+    max-width: 200px;
+    margin: 0;
 }
 
 /* ===================================
  * 5. رسائل التنبيه والحالة
  * =================================== */
 .message-box {
-    padding: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
     border-radius: var(--border-radius);
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
     text-align: right;
     font-size: var(--font-size-sm);
     border: 1px solid transparent;
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 .error-box {
-    background-color: #f8d7da; /* لون خلفية أحمر فاتح */
-    color: #721c24; /* لون نص أحمر داكن */
-    border-color: #f5c6cb;
+    background-color: #FADBD8;
+    color: #A93226;
+    border-color: #F5B7B1;
 }
 
 .success-box {
-    background-color: #d4edda; /* لون خلفية أخضر فاتح */
-    color: #155724; /* لون نص أخضر داكن */
-    border-color: #c3e6cb;
+    background-color: #D5F4E6;
+    color: #196F3D;
+    border-color: #A9DFBF;
 }
 
 /* ===================================
  * 6. معلومات المستخدم
  * =================================== */
 .user-info {
-    background-color: var(--border-color);
+    background-color: rgba(236, 240, 241, 0.5);
     padding: var(--spacing-md);
     border-radius: var(--border-radius);
     margin: var(--spacing-lg) 0;
     text-align: right;
+    border: 1px solid var(--border-color);
 }
 
 .user-info h3 {
     margin-top: 0;
     margin-bottom: var(--spacing-sm);
     color: var(--primary-color);
+    font-weight: var(--font-weight-bold);
 }
 
 .user-info p {
     margin-bottom: var(--spacing-xs);
+    color: var(--text-color);
 }
 
 /* ===================================
@@ -241,18 +300,18 @@ h6 {
  * =================================== */
 @media (max-width: 576px) {
     .container {
-        padding: var(--spacing-md);
+        padding: var(--spacing-md) var(--spacing-sm);
         margin: var(--spacing-sm);
-        box-shadow: none; /* إزالة الظل على الشاشات الصغيرة جدًا */
+        box-shadow: 0 4px 16px 0 var(--shadow-color);
     }
 
     .home-buttons .btn {
-        flex: 1 1 100%; /* زر واحد في الصف على الشاشات الصغيرة جدًا */
+        flex: 1 1 100%;
         max-width: none;
     }
 
     body {
-        align-items: flex-start; /* لتجنب تمدد المحتوى بشكل كبير */
+        align-items: flex-start;
         padding-top: var(--spacing-lg);
         padding-bottom: var(--spacing-lg);
     }
@@ -261,5 +320,6 @@ h6 {
 @media (max-width: 380px) {
     .container {
         max-width: 95%;
+        padding: var(--spacing-sm);
     }
 }
